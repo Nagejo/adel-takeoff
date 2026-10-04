@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Review{% endblock %}
+{% block body %}
+<p class="nav"><a href="/jobs/{{ review.job.id }}">Job settings</a> · <a href="/jobs/{{ review.job.id }}/export.xlsx">Download Excel quantity report</a> · <a href="/jobs/{{ review.job.id }}/export.pdf">Download marked-up PDF</a></p>
+<h1>Review {{ review.job.name }}</h1>
+{% if review.totals.journeyman_warning %}
+<p class="warning" id="journeyman-warning">{{ review.totals.journeyman_warning }}</p>
+{% endif %}
+<p id="markup-state">{% if review.totals.markup is none %}Markup: not applied{% else %}Markup: {{ review.totals.markup }}{% endif %}</p>
+<dl class="totals">
+  <div><dt>Power devices</dt><dd id="power-device-count">{{ review.totals.power_devices }}</dd></div>
+  <div><dt>Lighting fixtures</dt><dd id="lighting-fixture-count">{{ review.totals.lighting_fixtures }}</dd></div>
+  <div><dt>Lighting controls in scope</dt><dd id="lighting-control-count">{{ review.totals.lighting_controls }}</dd></div>
+  <div><dt>Direct cost</dt><dd id="direct-cost">{{ review.totals.direct_cost }}</dd></div>
+  <div><dt>Marked-up total</dt><dd id="marked-up-total">{% if review.totals.marked_up_total is none %}not applied{% else %}{{ review.totals.marked_up_total }}{% endif %}</dd></div>
+</dl>
+<p class="note">Material unit cost and labor hours stay blank until you enter them. Direct cost uses only those entries. Blank fields contribute nothing.</p>
+
+<h2>Detected counts</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Item</th>
+      <th>Category</th>
+      <th>Scope</th>
+      <th>Measured</th>
+      <th>Correction</th>
+      <th>Effective</th>
+      <th>Sheets</th>
+      <th>Panel</th>
+      <th>Circuit</th>
+      <th>Flag</th>
+      <th>Cost</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in review.rows %}
+    <tr id="item-{{ row.id }}" class="item status-{{ row.status }}{% if row.deduped %} deduped{% endif %}" data-label="{{ row.label }}" data-category="{{ row.category }}">
+      <td class="label">{{ row.label }}</td>
+      <td class="category">{{ row.category }}</td>
+      <td class="scope">{{ row.scope }}</td>
+      <td class="measured">{% if row.measured is none %}{% else %}{{ row.measured }}{% endif %}</td>
+      <td class="correction">
+        {% if row.show_correction %}
+        <form method="post" action="/jobs/{{ review.job.id }}/items/{{ row.id }}/correction">
+          <label>Count correction
+            <input name="override_quantity" type="text" value="{% if row.override is not none %}{{ row.override }}{% endif %}">
+          </label>
+          <label>Material unit cost
+            <input name="material_unit_cost" type="text" value="{{ row.material_unit_cost or '' }}">
+          </label>
+          <label>Labor hours
+            <input name="labor_hours" type="text" value="{{ row.labor_hours or '' }}">
+          </label>
+          <label>Labor rate
+            <select name="labor_rate_key">
+              {% for key, name, default in labor_rates %}
+              <option value="{{ key }}" {% if row.labor_rate_key == key %}selected{% endif %}>{{ name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <button type="submit">Save count correction</button>
+        </form>
+        {% else %}
+        —
+        {% endif %}
+      </td>
+      <td class="effective">{% if row.effective is none %}{% else %}{{ row.effective }}{% endif %}</td>
+      <td class="sheets">{{ row.sheets | join(", ") }}{% if row.deduped %} <span class="pill">counted once</span>{% endif %}</td>
+      <td class="panel">{{ row.panel }}</td>
+      <td class="circuit">{{ row.circuit }}</td>
+      <td class="link-flag">{{ row.link_flag }}</td>
+      <td class="direct">{% if row.direct_cost is none %}{% else %}{{ row.direct_cost }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Unresolved</h2>
+<ul id="unresolved">
+  {% for row in review.unresolved %}
+  <li class="{% if row.status == 'unmatched' %}unmatched{% else %}missing-link{% endif %}">{{ row.label }} on {{ row.sheets | join(", ") }}: {{ row.link_flag or row.status }}</li>
+  {% else %}
+  <li>None</li>
+  {% endfor %}
+</ul>
+
+<h2>RFIs</h2>
+<ul id="rfis">
+  {% for rfi in review.rfis %}
+  <li class="rfi" data-disposition="{{ rfi.disposition }}"><strong>{{ rfi.topic }}</strong> — {{ rfi.detail }}{% if rfi.sections %} ({{ rfi.sections }}){% endif %}</li>
+  {% else %}
+  <li>None</li>
+  {% endfor %}
+</ul>
+
+<h2>Code claims</h2>
+<ul id="code-claims">
+  {% for claim in review.claims %}
+  <li class="code-claim" data-section="{{ claim.section }}">{{ claim.rendered }}</li>
+  {% else %}
+  <li>None</li>
+  {% endfor %}
+</ul>
+
+<h2>Allowances</h2>
+<p class="note">An allowance is a quantity you enter, with a reason. It is not a measured device count.</p>
+<ul id="allowances">
+  {% for allowance in review.allowances %}
+  <li class="allowance">{{ allowance.description }}: {{ allowance.quantity }} — {{ allowance.reason }}</li>
+  {% else %}
+  <li>None</li>
+  {% endfor %}
+</ul>
+<form method="post" action="/jobs/{{ review.job.id }}/allowances" class="allowance-form">
+  <label>Description <input name="description" type="text" required></label>
+  <label>Quantity <input name="quantity" type="text" required></label>
+  <label>Reason <input name="reason" type="text" required></label>
+  <label>Category <input name="category" type="text" value="allowance"></label>
+  <label>Material unit cost <input name="material_unit_cost" type="text"></label>
+  <label>Labor hours <input name="labor_hours" type="text"></label>
+  <label>Labor rate
+    <select name="labor_rate_key">
+      {% for key, name, default in labor_rates %}
+      <option value="{{ key }}">{{ name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit">Add allowance</button>
+</form>
+{% endblock %}

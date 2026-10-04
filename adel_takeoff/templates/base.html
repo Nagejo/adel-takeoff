@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Quantity takeoff{% endblock %} · Adel Electric</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header>
+    <p class="contractor">{{ contractor }}</p>
+    <p class="tool">Internal quantity takeoff</p>
+    <p class="disclaimer">{{ disclaimer }}</p>
+  </header>
+  <main>
+    {% block body %}{% endblock %}
+  </main>
+</body>
+</html>

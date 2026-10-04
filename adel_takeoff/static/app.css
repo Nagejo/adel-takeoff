@@ -1,0 +1,126 @@
+:root {
+  color-scheme: light;
+  --ink: #1c1915;
+  --muted: #5c564c;
+  --line: #d9d2c5;
+  --paper: #f7f4ee;
+  --warn: #8a5a00;
+  --warn-bg: #fff4d6;
+  --error: #8d1d1d;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 16px/1.45 "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+header, main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1rem 1.25rem;
+}
+
+header {
+  border-bottom: 1px solid var(--line);
+}
+
+.contractor {
+  margin: 0;
+  font-weight: 700;
+}
+
+.tool, .disclaimer, .note {
+  margin: 0.2rem 0;
+  color: var(--muted);
+}
+
+h1 { font-size: 1.4rem; }
+h2 { font-size: 1.1rem; margin-top: 1.6rem; }
+
+form, fieldset {
+  display: grid;
+  gap: 0.6rem;
+}
+
+fieldset {
+  border: 1px solid var(--line);
+  padding: 0.8rem;
+}
+
+label { display: grid; gap: 0.2rem; font-size: 0.95rem; }
+label.check { display: flex; gap: 0.5rem; align-items: center; }
+
+input, select, button {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+}
+
+button {
+  width: fit-content;
+  background: var(--ink);
+  color: white;
+  border: 0;
+  cursor: pointer;
+}
+
+.rate-line {
+  display: grid;
+  grid-template-columns: 10rem 8rem auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.warning, .error {
+  padding: 0.6rem 0.75rem;
+  background: var(--warn-bg);
+  color: var(--warn);
+  border: 1px solid #e2c98a;
+}
+
+.error { color: var(--error); background: #fde8e8; border-color: #e3b0b0; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  font-size: 0.92rem;
+}
+
+th, td {
+  border: 1px solid var(--line);
+  padding: 0.4rem;
+  vertical-align: top;
+  text-align: left;
+}
+
+.totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.totals div {
+  background: white;
+  border: 1px solid var(--line);
+  padding: 0.5rem 0.75rem;
+  min-width: 8rem;
+}
+
+.totals dt { color: var(--muted); font-size: 0.85rem; }
+.totals dd { margin: 0; font-size: 1.3rem; }
+
+.pill {
+  display: inline-block;
+  border: 1px solid #9bb0d1;
+  color: #1d3f73;
+  padding: 0 0.3rem;
+  font-size: 0.8rem;
+}
+
+td form { display: grid; gap: 0.3rem; }
+.nav { margin-top: 0; }
+a { color: #1d3f73; }
