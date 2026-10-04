@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Job{% endblock %}
+{% block body %}
+<p class="nav"><a href="/">Upload</a> · <a href="/jobs/{{ job.id }}/review">Review counts</a></p>
+<h1>{{ job.name }}</h1>
+{% if error %}
+<p class="error" id="form-error">{{ error }}</p>
+{% endif %}
+<form method="post" action="/jobs/{{ job.id }}">
+  <fieldset>
+    <legend>Permit-issue date</legend>
+    <label for="permit_issue_date">Permit-issue date</label>
+    <input id="permit_issue_date" name="permit_issue_date" type="date" value="{{ job.permit_issue_date or '' }}">
+    <p class="note">On or before 2026-12-31 the edition is FBC 8th Edition and NEC 2020. After 2026-12-31 it is FBC 9th Edition and NEC 2023. A date left blank stays unknown. Text on the drawing does not set the edition.</p>
+    <p id="code-edition">Code edition: {{ job.code_fbc }} / {{ job.code_nec }} (basis: {{ job.code_basis }})</p>
+  </fieldset>
+  <fieldset>
+    <legend>Markup</legend>
+    <label for="markup">Markup decimal</label>
+    <input id="markup" name="markup" type="text" inputmode="decimal" value="{{ job.markup or '' }}" placeholder="blank means do not apply">
+    <p class="note" id="markup-note">No markup is applied until you enter one. 0.35 means 35 percent. A markup greater than 5 is rejected.</p>
+  </fieldset>
+  <fieldset>
+    <legend>Labor rates</legend>
+    {% if warning %}
+    <p class="warning" id="journeyman-warning">{{ warning }}</p>
+    {% endif %}
+    <div class="rate-line">
+      <label for="rate_journeyman">Journeyman</label>
+      <input id="rate_journeyman" name="rate_journeyman" type="text" value="{{ job.rate_journeyman }}" required>
+      <span>per hour</span>
+    </div>
+    <div class="rate-line">
+      <label for="rate_foreman">Foreman</label>
+      <input id="rate_foreman" name="rate_foreman" type="text" value="{{ job.rate_foreman }}" required>
+      <span>per hour</span>
+    </div>
+    <div class="rate-line">
+      <label for="rate_pm">PM or master</label>
+      <input id="rate_pm" name="rate_pm" type="text" value="{{ job.rate_pm }}" required>
+      <span>per hour</span>
+    </div>
+    <div class="rate-line">
+      <label for="rate_apprentice">Apprentice</label>
+      <input id="rate_apprentice" name="rate_apprentice" type="text" value="{{ job.rate_apprentice }}" required>
+      <span>per hour</span>
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>Scope that is by others unless this job includes it</legend>
+    <label class="check"><input type="checkbox" name="include_landscape" value="yes" {% if job.include_landscape %}checked{% endif %}> This job includes landscape lighting</label>
+    <label class="check"><input type="checkbox" name="include_lighting_control" value="yes" {% if job.include_lighting_control %}checked{% endif %}> This job includes lighting control</label>
+    <p class="note">Left unchecked, landscape lighting and lighting control stay by others.</p>
+  </fieldset>
+  <button type="submit">Save job</button>
+</form>
+{% endblock %}
