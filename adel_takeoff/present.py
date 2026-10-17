@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from pathlib import Path
 
 from adel_takeoff.classify import categorize, in_scope, scope_label
-from adel_takeoff.confidence import confidence_band
+from adel_takeoff.confidence import apply_discrepancy_cap, confidence_band
+from adel_takeoff.constants import DISCREPANCY_CONFIDENCE_CAP
 from adel_takeoff.costing import apply_markup, journeyman_warning, line_direct_cost
+from adel_takeoff.extract import read_pdf
 from adel_takeoff.lines import excluded_lines, how_counted, quantity_lines
+from adel_takeoff.schedule_link import attach_schedules
 
 
 EXCLUSION_LABELS = {
@@ -172,6 +176,15 @@ def present_item(item: dict, job: dict) -> dict:
         "location": location_text(occurrences),
         "panel": panel,
         "circuit": circuit,
+        "type_mark": "",
+        "type_description": "",
+        "mounting": "",
+        "mounting_height": "",
+        "voltage": "",
+        "circuit_description": "",
+        "breaker": "",
+        "poles": "",
+        "schedule_load": "",
         "link_flag": link_flag,
         "deduped": bool(item["deduped"]),
         "scope": scope,
@@ -256,8 +269,27 @@ def _id_key(row: dict) -> tuple:
     return (1, text)
 
 
+def _schedule_pages(job: dict):
+    raw = job.get("pdf_path") or ""
+    if not raw:
+        return []
+    path = Path(raw)
+    if not path.is_file():
+        return []
+    return read_pdf(path.read_bytes())
+
+
 def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, claims) -> dict:
     rows = sorted((present_item(item, job) for item in items), key=_id_key)
+    linked = attach_schedules(rows, _schedule_pages(job))
+    affected = {
+        item_id
+        for entry in linked["discrepancies"]
+        for item_id in entry["item_ids"]
+    }
+    for row in rows:
+        if row["id"] in affected:
+            row["confidence"] = apply_discrepancy_cap(row["confidence"])
     allowance_rows = [present_allowance(row, job) for row in allowances]
     totals = review_totals(rows, allowance_rows, job.get("markup"))
     totals["journeyman_warning"] = journeyman_warning(_decimal(job["rate_journeyman"]))
@@ -276,4 +308,12 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
         "claims": claims,
         "unresolved": unresolved,
         "totals": totals,
+        "fixture_rows": linked["fixture_rows"],
+        "panel_rows": linked["panel_rows"],
+        "schedule_regions": linked["regions"],
+        "fixture_table_count": linked["fixture_table_count"],
+        "panel_table_count": linked["panel_table_count"],
+        "discrepancies": linked["discrepancies"],
+        "by_type": linked["by_type"],
+        "discrepancy_cap": DISCREPANCY_CONFIDENCE_CAP,
     }

@@ -24,6 +24,9 @@ This is an internal tool. It is not a product for other contractors. It is not D
 - Review each mark before you treat the export as final: accept it, reject it, correct its type or panel/circuit tag, or exclude it as existing-to-remain, NIC, or by others. Excluded marks stay on an Excluded sheet and are drawn differently. They are not in the counted total.
 - Add a missed mark by sheet and location. That adds one item. It does not invent a quantity.
 - Store those decisions in `reviews/<job-id>.json` next to the job. A later export reads that file and reproduces the same result.
+- Read a lighting fixture schedule and a panel schedule when the drawing prints one. A fixture type tag is linked to that schedule row's description, mounting, and voltage. A panel and circuit tag is linked to that circuit's schedule row. Mounting height is copied from the schedule, or from a height tag on the plan when the schedule does not print one.
+- When a type tag has no schedule row, a schedule row has no plan marks, a plan circuit is missing from the panel schedule, or the plan count and the schedule count differ, both facts are written to a Discrepancies sheet. The plan count is kept. A discrepancy lowers a recorded confidence flag to check and does not create a flag when the detector recorded no score.
+- The Excel report adds the copied schedule columns and a per-type rollup by sheet and floor. Summing the per-sheet counts can count an overlap device twice. The rollup also keeps the unique device count.
 
 The legend is the stack of labeled symbols under the heading `SYMBOL LEGEND`. Rows more than 72 points apart are not treated as the same legend. Match lines need a shared key and one overlap depth, for example `MATCH LINE ML-A OVERLAP 120`.
 
@@ -32,6 +35,8 @@ The legend is the stack of labeled symbols under the heading `SYMBOL LEGEND`. Ro
 - Conduit routing, wire sizing, voltage drop, derating, home-run grouping, or Revit / BIM output.
 - Invented or eyeballed counts, guessed panel or circuit links, a price book, or default labor hours.
 - A text-tag detector. The count method can record `text tag` when a future detector emits one. This version does not.
+- Assemblies, drawing scale, and revision comparison.
+- A schedule value that the drawing did not print. A blank cell stays blank.
 - A confidence flag with no detector score. Blank means no score. It is not filled in.
 - A default markup.
 - A multi-contractor product.

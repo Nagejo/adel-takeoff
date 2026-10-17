@@ -47,28 +47,34 @@ def _distance_to_bbox(word: Word, bbox: tuple[float, float, float, float]) -> fl
     return (dx * dx + dy * dy) ** 0.5
 
 
-def _line_text(cluster: Cluster, words: list[Word]) -> list[str]:
-    """Tags anchored within the link radius, including the rest of that tag line."""
+def texts_near_bbox(
+    bbox: tuple[float, float, float, float],
+    words: list[Word],
+    radius: float = LINK_RADIUS_PT,
+) -> list[str]:
+    """Text lines anchored within the link radius of a device box."""
 
-    anchors = [
-        word
-        for word in words
-        if _distance_to_bbox(word, cluster.bbox) <= LINK_RADIUS_PT
-    ]
+    anchors = [word for word in words if _distance_to_bbox(word, bbox) <= radius]
     if not anchors:
         return []
     texts = []
     for line in group_lines(words):
         if not any(anchor in line for anchor in anchors):
             continue
-        kept = [
-            word
-            for word in line
-            if _distance_to_bbox(word, cluster.bbox) <= 160
-        ]
+        kept = [word for word in line if _distance_to_bbox(word, bbox) <= 160]
         if kept:
             texts.append(" ".join(word.text for word in kept))
     return texts
+
+
+def _line_text(cluster: Cluster, words: list[Word]) -> list[str]:
+    """Tags anchored within the link radius, including the rest of that tag line."""
+
+    return texts_near_bbox(cluster.bbox, words)
+
+
+def is_grid_line(text: str) -> bool:
+    return _GRID_LINE.match(text.strip()) is not None
 
 
 def _grid_refs(bbox: tuple[float, float, float, float], words: list[Word]) -> list[str]:

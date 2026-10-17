@@ -15,7 +15,113 @@
   <div><dt>Marked-up total</dt><dd id="marked-up-total">{% if review.totals.marked_up_total is none %}not applied{% else %}{{ review.totals.marked_up_total }}{% endif %}</dd></div>
 </dl>
 <p class="note">Material unit cost and labor hours stay blank until you enter them. Direct cost uses only those entries. Blank fields contribute nothing.</p>
-<p class="note" id="confidence-note">Confidence is high, check, or low only when the detector recorded a score. The cutoffs live in config. A blank confidence means there is no score. A manual add has no score. Counts are the marks that were detected or that you added, after review.</p>
+<p class="note" id="confidence-note">Confidence is high, check, or low only when the detector recorded a score. The cutoffs live in config. A blank confidence means there is no score. A manual add has no score. A schedule discrepancy lowers a recorded flag to {{ review.discrepancy_cap }} and does not create a flag when there is no score. Counts are the marks that were detected or that you added, after review.</p>
+
+<section id="schedules">
+  <h2>Schedules</h2>
+  <p class="note">These cells are copied from the drawing. A blank cell was not printed. Device quantities stay the plan count.</p>
+  <h3 id="fixture-schedule">Fixture schedule</h3>
+  {% if review.fixture_table_count %}
+  <table>
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+        <th>Manufacturer</th>
+        <th>Lamp</th>
+        <th>Voltage</th>
+        <th>Mounting</th>
+        <th>Mounting height</th>
+        <th>Count</th>
+        <th>Sheet</th>
+        <th>Copied</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in review.fixture_rows %}
+      <tr>
+        <td>{{ row.mark }}</td>
+        <td>{{ row.description }}</td>
+        <td>{{ row.manufacturer }}</td>
+        <td>{{ row.lamp }}</td>
+        <td>{{ row.voltage }}</td>
+        <td>{{ row.mounting }}</td>
+        <td>{{ row.mounting_height }}</td>
+        <td>{{ row.count_text }}</td>
+        <td>{{ row.sheet }}</td>
+        <td>{% if row.used %}yes{% else %}no{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No fixture schedule detected.</p>
+  {% endif %}
+  <h3 id="panel-schedule">Panel schedule</h3>
+  {% if review.panel_table_count %}
+  <table>
+    <thead>
+      <tr>
+        <th>Panel</th>
+        <th>Circuit</th>
+        <th>Description</th>
+        <th>Breaker</th>
+        <th>Poles</th>
+        <th>Load</th>
+        <th>Sheet</th>
+        <th>Copied</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in review.panel_rows %}
+      <tr>
+        <td>{{ row.panel }}</td>
+        <td>{{ row.circuit }}</td>
+        <td>{{ row.description }}</td>
+        <td>{{ row.breaker }}</td>
+        <td>{{ row.poles }}</td>
+        <td>{{ row.load }}</td>
+        <td>{{ row.sheet }}</td>
+        <td>{% if row.used %}yes{% else %}no{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No panel schedule detected.</p>
+  {% endif %}
+</section>
+
+<section id="discrepancies">
+  <h2>Discrepancies</h2>
+  <p class="note">Both numbers are recorded. A schedule count does not replace the plan count.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Kind</th>
+        <th>Detail</th>
+        <th>Plan</th>
+        <th>Schedule</th>
+        <th>Item IDs</th>
+        <th>Sheet number</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in review.discrepancies %}
+      <tr class="discrepancy" data-kind="{{ row.kind }}">
+        <td>{{ row.kind }}</td>
+        <td>{{ row.detail }}</td>
+        <td>{{ row.plan }}</td>
+        <td>{{ row.schedule }}</td>
+        <td>{{ row.item_ids | join(", ") }}</td>
+        <td>{{ row.sheet_number }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6">None</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
 
 <h2>Detected counts</h2>
 <div class="table-scroll">

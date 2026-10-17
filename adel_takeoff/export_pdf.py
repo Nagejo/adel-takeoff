@@ -16,6 +16,7 @@ UNMATCHED_COLOR = (0.7, 0.1, 0.1)
 BY_OTHERS_COLOR = (0.35, 0.35, 0.35)
 REJECTED_COLOR = (0.55, 0.0, 0.0)
 EXCLUDED_COLOR = (0.25, 0.25, 0.25)
+SCHEDULE_COLOR = (0, 0.45, 0.45)
 
 
 def build_markup_pdf(pdf_bytes: bytes, job, items, allowances, rfis, claims) -> bytes:
@@ -47,6 +48,18 @@ def build_markup_pdf(pdf_bytes: bytes, job, items, allowances, rfis, claims) -> 
                     fontname="helv",
                     color=color,
                 )
+        for region in review.get("schedule_regions") or []:
+            page = document[region["page_index"]]
+            x0, y0, x1, y1 = region["bbox"]
+            rect = fitz.Rect(x0 - 4, y0 - 4, x1 + 4, y1 + 4)
+            page.draw_rect(rect, color=SCHEDULE_COLOR, width=1.0)
+            page.insert_text(
+                fitz.Point(rect.x0, max(12, rect.y0 - 2)),
+                region["label"],
+                fontsize=8,
+                fontname="helv",
+                color=SCHEDULE_COLOR,
+            )
         stamp = f"{CONTRACTOR}. {DISCLAIMER}"
         for page in document:
             box = fitz.Rect(36, page.rect.height - 32, page.rect.width - 36, page.rect.height - 12)
