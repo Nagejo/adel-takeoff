@@ -6,6 +6,7 @@ import os
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from uuid import uuid4
 
 import fitz
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -53,6 +54,17 @@ from adel_takeoff.export_excel import build_workbook
 from adel_takeoff.export_pdf import build_markup_pdf
 from adel_takeoff.extract import page_words, read_sheet_title, sheet_name
 from adel_takeoff.present import build_review
+from adel_takeoff.scale import (
+    PICKED_SCALES,
+    ScaleInputError,
+    calibrate,
+    measure_polyline,
+    parse_points,
+    picked_scale,
+    report_for_job,
+    utc_now,
+)
+from adel_takeoff.scale_store import load_scales, save_scales, scale_path
 from adel_takeoff.review_store import (
     REVIEW_ACTIONS,
     ReviewError,
@@ -355,6 +367,138 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
         merged.update(fresh)
         save_overrides(path, {"overrides": merged})
         return RedirectResponse(url=f"/jobs/{job_id}/assemblies", status_code=303)
+
+    def _scale_page(request: Request, job_id: str, error: str = "", status_code: int = 200):
+        loaded = _load(job_id)
+        report = report_for_job(loaded["job"])
+        data_dir = data_dir_for_job(loaded["job"]) or root
+        return TEMPLATES.TemplateResponse(
+            request,
+            "scale.html",
+            {
+                "contractor": CONTRACTOR,
+                "disclaimer": DISCLAIMER,
+                "job": loaded["job"],
+                "sheets": report["sheets"],
+                "measurements": report["measurements"],
+                "picked_scales": PICKED_SCALES,
+                "scale_path": str(scale_path(data_dir, job_id)),
+                "error": error,
+            },
+            status_code=status_code,
+        )
+
+    @app.get("/jobs/{job_id}/scale", response_class=HTMLResponse)
+    def scale_page(request: Request, job_id: str):
+        return _scale_page(request, job_id)
+
+    @app.post("/jobs/{job_id}/scales")
+    async def save_scale(request: Request, job_id: str):
+        loaded = _load(job_id)
+        form = await request.form()
+        data_dir = data_dir_for_job(loaded["job"])
+        if data_dir is None:
+            raise HTTPException(status_code=400, detail="This job has no data directory for scales.")
+        path = scale_path(data_dir, job_id)
+        document = load_scales(path)
+        try:
+            page_index = int(str(form.get("page_index") or "").strip())
+        except ValueError:
+            return _scale_page(request, job_id, error="Choose a sheet.", status_code=400)
+        mode = "clear" if form.get("clear") == "yes" else str(form.get("mode") or "picked")
+        if mode == "clear":
+            document["manual"].pop(str(page_index), None)
+            save_scales(path, document)
+            return RedirectResponse(url=f"/jobs/{job_id}/scale", status_code=303)
+        set_by = str(form.get("set_by") or "").strip()
+        if not set_by:
+            return _scale_page(request, job_id, error="Who set the scale is required.", status_code=400)
+        try:
+            if mode == "dimension":
+                x1 = Decimal(str(form.get("x1") or "").strip())
+                y1 = Decimal(str(form.get("y1") or "").strip())
+                x2 = Decimal(str(form.get("x2") or "").strip())
+                y2 = Decimal(str(form.get("y2") or "").strip())
+                known = Decimal(str(form.get("known_feet") or "").strip())
+                feet_per_point, label = calibrate(x1, y1, x2, y2, known)
+                distance_pt = known / feet_per_point
+                read_from = [
+                    {
+                        "kind": "known dimension",
+                        "label": label,
+                        "bbox": [float(x1), float(y1), float(x2), float(y2)],
+                        "nts": False,
+                        "conflict": False,
+                    }
+                ]
+                method = "known dimension"
+            else:
+                parsed = picked_scale(str(form.get("picked") or ""))
+                feet_per_point = parsed.feet_per_point
+                label = parsed.label
+                read_from = [{"kind": "picked scale", "label": label, "bbox": None, "nts": False, "conflict": False}]
+                method = "picked"
+        except (InvalidOperation, ScaleInputError) as exc:
+            message = str(exc) if isinstance(exc, ScaleInputError) else "The scale entry must be a number."
+            return _scale_page(request, job_id, error=message, status_code=400)
+        stored = {
+            "label": label,
+            "feet_per_point": format(feet_per_point, "f"),
+            "method": method,
+            "set_by": set_by,
+            "set_at": utc_now(),
+            "read_from": read_from,
+        }
+        if mode == "dimension":
+            stored["known_feet"] = format(known, "f")
+            stored["distance_pt"] = format(distance_pt, "f")
+        document["manual"][str(page_index)] = stored
+        save_scales(path, document)
+        return RedirectResponse(url=f"/jobs/{job_id}/scale", status_code=303)
+
+    @app.post("/jobs/{job_id}/measurements")
+    async def save_measurement(request: Request, job_id: str):
+        loaded = _load(job_id)
+        form = await request.form()
+        data_dir = data_dir_for_job(loaded["job"])
+        if data_dir is None:
+            raise HTTPException(status_code=400, detail="This job has no data directory for scales.")
+        try:
+            page_index = int(str(form.get("page_index") or "").strip())
+            points = parse_points(str(form.get("points") or ""))
+        except (ValueError, ScaleInputError) as exc:
+            message = str(exc) if isinstance(exc, ScaleInputError) else "Choose a sheet."
+            return _scale_page(request, job_id, error=message, status_code=400)
+        set_by = str(form.get("set_by") or "").strip()
+        if not set_by:
+            return _scale_page(request, job_id, error="Who measured the length is required.", status_code=400)
+        report = report_for_job(loaded["job"])
+        sheet = next((item for item in report["sheets"] if item["page_index"] == page_index), None)
+        if sheet is None:
+            return _scale_page(request, job_id, error="That sheet is not in this job.", status_code=400)
+        measured = measure_polyline(sheet, points)
+        if not measured["ok"]:
+            return _scale_page(request, job_id, error=measured["reason"], status_code=400)
+        path = scale_path(data_dir, job_id)
+        document = load_scales(path)
+        document["measurements"].append(
+            {
+                "id": uuid4().hex[:12],
+                "page_index": page_index,
+                "sheet": sheet["sheet"],
+                "sheet_title": sheet["sheet_title"],
+                "points": [[format(point[0], "f"), format(point[1], "f")] for point in points],
+                "length_ft": format(measured["length_ft"], "f"),
+                "scale_label": measured["scale_label"],
+                "scale_source": measured["scale_source"],
+                "scale_read_from": measured["scale_read_from"],
+                "method": "measured",
+                "set_by": set_by,
+                "set_at": utc_now(),
+            }
+        )
+        save_scales(path, document)
+        return RedirectResponse(url=f"/jobs/{job_id}/scale", status_code=303)
 
     @app.get("/jobs/{job_id}/review", response_class=HTMLResponse)
     def review_page(request: Request, job_id: str):

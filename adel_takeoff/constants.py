@@ -48,6 +48,13 @@ PERMIT_CODE_CUTOFF = date(2026, 12, 31)
 # Markup is a job decimal. 0.35 means 35 percent. Blank means do not apply.
 MAX_MARKUP = Decimal("5")
 
+# 72 PDF points are one inch on the sheet.
+POINTS_PER_INCH = Decimal("72")
+
+# A printed scale and a graphic bar within this relative difference confirm
+# each other. A wider gap is a refusal. The two readings are not averaged.
+SCALE_AGREEMENT_TOLERANCE = Decimal("0.05")
+
 # A panel or circuit tag must sit this close to the device. Farther text is
 # not a link.
 LINK_RADIUS_PT = 48.0

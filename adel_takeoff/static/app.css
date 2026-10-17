@@ -138,7 +138,10 @@ tr.status-unmatched { background: #fff1f1; }
   max-width: 1100px;
 }
 
-.assembly-block { margin-top: 1.2rem; }
+.assembly-block, .scale-card { margin-top: 1.2rem; }
+.scale-card { border-top: 1px solid #e4ded3; padding-top: 0.8rem; }
+.scale-card input[type="text"], .scale-card textarea { width: 12rem; }
+.scale-card textarea { height: 4rem; width: 18rem; }
 .assembly-block input[type="text"] { width: 7rem; }
 .assembly-block select { width: 10rem; }
 

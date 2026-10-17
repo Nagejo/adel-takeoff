@@ -233,6 +233,7 @@ def build_workbook(job: dict, items, allowances, rfis, claims) -> bytes:
     _write_discrepancies(workbook, review["discrepancies"])
     _write_materials(workbook, review["materials"])
     _write_labor(workbook, job, review["labor"], review.get("assembly_warning") or "")
+    _write_measured(workbook, review.get("scales") or [], review.get("measurements") or [])
 
     buffer = BytesIO()
     workbook.save(buffer)
@@ -353,6 +354,7 @@ def _write_materials(workbook: Workbook, rows: list[dict]) -> None:
     sheet["A1"] = (
         "Part quantity is the takeoff count times the assembly per-unit quantity. "
         "Raceway and conductor lengths are allowances, not measured lengths. "
+        "A measured length is on the Measured sheet and does not replace an allowance. "
         "Unconfirmed rows are examples and are not a published labor standard."
     )
     headers = [
@@ -387,6 +389,121 @@ def _write_materials(workbook: Workbook, rows: list[dict]) -> None:
         ]
         for column, value in enumerate(values, start=1):
             sheet.cell(index, column, value if value is not None else None)
+
+
+def _write_measured(workbook: Workbook, sheets: list[dict], measurements: list[dict]) -> None:
+    sheet = workbook.create_sheet("Measured")
+    sheet["A1"] = (
+        "A length is measured only where the sheet has one valid scale. "
+        "Missing, NTS, ambiguous, and disagreeing scales are refused. "
+        "Measured lengths stay off the assembly allowance lines. "
+        "There is no routing and there are no home runs."
+    )
+    headers = [
+        "Sheet",
+        "PDF page",
+        "Status",
+        "Scale",
+        "Source",
+        "Read from",
+        "Applies to",
+        "Reason",
+        "Set by",
+        "Set at",
+    ]
+    for column, header in enumerate(headers, start=1):
+        cell = sheet.cell(3, column, header)
+        cell.font = Font(bold=True)
+    row_index = 4
+    for page in sheets:
+        regions = page["regions"]
+        detected = page["detected"] if page.get("overridden") else []
+        for region in regions:
+            read_from = "; ".join(
+                (
+                    f"{item['kind']} {item['bbox'][0]:.2f},{item['bbox'][1]:.2f} to {item['bbox'][2]:.2f},{item['bbox'][3]:.2f}"
+                    if item.get("bbox")
+                    else item["kind"]
+                )
+                for item in region.get("read_from") or []
+            )
+            applies = "sheet"
+            if region.get("viewport"):
+                box = region["viewport"]
+                applies = f"viewport {box[0]:.2f},{box[1]:.2f} to {box[2]:.2f},{box[3]:.2f}"
+            values = [
+                page["sheet"],
+                page["page_index"] + 1,
+                region["status"],
+                region.get("label") or None,
+                region.get("source") or None,
+                read_from or None,
+                applies,
+                region.get("reason") or None,
+                region.get("set_by") or None,
+                region.get("set_at") or None,
+            ]
+            for column, value in enumerate(values, start=1):
+                sheet.cell(row_index, column, value if value is not None else None)
+            row_index += 1
+        for region in detected:
+            values = [
+                page["sheet"],
+                page["page_index"] + 1,
+                "overridden",
+                region.get("label") or None,
+                region.get("source") or None,
+                None,
+                "detected",
+                region.get("reason") or "Detection was overridden by a manual scale.",
+                None,
+                None,
+            ]
+            for column, value in enumerate(values, start=1):
+                sheet.cell(row_index, column, value if value is not None else None)
+            row_index += 1
+    row_index += 1
+    sheet.cell(row_index, 1, "Measured lengths").font = Font(bold=True)
+    row_index += 1
+    length_headers = [
+        "Sheet",
+        "PDF page",
+        "Scale",
+        "Scale source",
+        "Method",
+        "Length (ft)",
+        "Scale read from",
+        "Points",
+        "Set by",
+        "Set at",
+    ]
+    for column, header in enumerate(length_headers, start=1):
+        cell = sheet.cell(row_index, column, header)
+        cell.font = Font(bold=True)
+    row_index += 1
+    if not measurements:
+        sheet.cell(row_index, 1, "No measured lengths")
+        return
+    for measurement in measurements:
+        points = "; ".join(
+            f"{point[0]},{point[1]}" for point in measurement.get("points") or []
+        )
+        length = measurement.get("length_ft")
+        values = [
+            measurement.get("sheet"),
+            (measurement.get("page_index") or 0) + 1,
+            measurement.get("scale_label"),
+            measurement.get("scale_source"),
+            measurement.get("method") or "measured",
+            _number(Decimal(length)) if length not in (None, "") else None,
+            measurement.get("scale_read_from") or None,
+            points or None,
+            measurement.get("set_by"),
+            measurement.get("set_at"),
+        ]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(row_index, column, value if value is not None else None)
+        row_index += 1
 
 
 def _write_labor(workbook: Workbook, job: dict, rows: list[dict], warning: str) -> None:
