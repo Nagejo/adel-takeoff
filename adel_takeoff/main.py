@@ -38,6 +38,7 @@ from adel_takeoff.code_notes import edition_for
 from adel_takeoff.costing import MarkupRejected, parse_markup, parse_rate
 from adel_takeoff.db import (
     add_allowance,
+    clear_takeoff,
     create_job,
     get_job,
     list_allowances,
@@ -48,6 +49,7 @@ from adel_takeoff.db import (
     save_takeoff,
     session,
     update_item_correction,
+    update_item_review,
     update_settings,
 )
 from adel_takeoff.export_excel import build_workbook
@@ -65,6 +67,15 @@ from adel_takeoff.scale import (
     utc_now,
 )
 from adel_takeoff.scale_store import load_scales, save_scales, scale_path
+from adel_takeoff.revision import (
+    build_overlay,
+    compare_sets,
+    load_revision,
+    overlay_file,
+    revision_path,
+    save_revision,
+    utc_now as revision_now,
+)
 from adel_takeoff.review_store import (
     REVIEW_ACTIONS,
     ReviewError,
@@ -499,6 +510,95 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
         )
         save_scales(path, document)
         return RedirectResponse(url=f"/jobs/{job_id}/scale", status_code=303)
+
+    def _revision_page(request: Request, job_id: str, error: str = "", status_code: int = 200):
+        loaded = _load(job_id)
+        data_dir = data_dir_for_job(loaded["job"]) or root
+        report = load_revision(revision_path(data_dir, job_id))
+        return TEMPLATES.TemplateResponse(
+            request,
+            "revision.html",
+            {
+                "contractor": CONTRACTOR,
+                "disclaimer": DISCLAIMER,
+                "job": loaded["job"],
+                "revision": report,
+                "error": error,
+            },
+            status_code=status_code,
+        )
+
+    @app.get("/jobs/{job_id}/revision", response_class=HTMLResponse)
+    def revision_page(request: Request, job_id: str):
+        return _revision_page(request, job_id)
+
+    @app.post("/jobs/{job_id}/revision")
+    async def compare_revision(request: Request, job_id: str):
+        loaded = _load(job_id)
+        form = await request.form()
+        upload = form.get("pdf")
+        payload = await upload.read() if upload is not None and hasattr(upload, "read") else b""
+        filename = getattr(upload, "filename", "") or "revision.pdf"
+        if not payload:
+            return _revision_page(request, job_id, error="Upload the revised PDF.", status_code=400)
+        try:
+            document = fitz.open(stream=payload, filetype="pdf")
+            document.close()
+        except Exception:
+            return _revision_page(request, job_id, error="Upload a PDF drawing set.", status_code=400)
+        data_dir = data_dir_for_job(loaded["job"])
+        if data_dir is None:
+            raise HTTPException(status_code=400, detail="This job has no data directory for a revision.")
+        previous_pdf = Path(loaded["job"]["pdf_path"]).read_bytes()
+        review = load_document(review_path(data_dir, job_id))
+        compared = compare_sets(previous_pdf, payload, loaded["items"], review.get("decisions") or {})
+        overlay = build_overlay(previous_pdf, payload, compared["overlay_sheets"])
+        overlay_path = overlay_file(data_dir, job_id)
+        overlay_path.parent.mkdir(parents=True, exist_ok=True)
+        overlay_path.write_bytes(overlay)
+        Path(loaded["job"]["pdf_path"]).write_bytes(payload)
+        with session(db_path) as conn:
+            clear_takeoff(conn, job_id)
+            save_takeoff(conn, job_id, compared["takeoff"])
+            for item_id, decision in compared["kept_decisions"].items():
+                update_item_review(conn, job_id, item_id, decision)
+            for item_id, costs in compared["carried_costs"].items():
+                update_item_correction(conn, job_id, item_id, costs)
+        save_document(
+            review_path(data_dir, job_id),
+            {
+                "added": [],
+                "decisions": compared["kept_decisions"],
+                "revision_checks": compared["revision_checks"],
+            },
+        )
+        save_revision(
+            revision_path(data_dir, job_id),
+            {
+                "compared": True,
+                "note": "",
+                "previous_name": loaded["job"].get("name") or "",
+                "revised_name": Path(filename).name,
+                "compared_at": revision_now(),
+                "sheets": compared["sheets"],
+                "changes": compared["changes"],
+                "revision_checks": compared["revision_checks"],
+            },
+        )
+        return RedirectResponse(url=f"/jobs/{job_id}/revision", status_code=303)
+
+    @app.get("/jobs/{job_id}/revision/overlay.pdf")
+    def revision_overlay(job_id: str):
+        loaded = _load(job_id)
+        data_dir = data_dir_for_job(loaded["job"]) or root
+        path = overlay_file(data_dir, job_id)
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="No revision overlay has been made.")
+        return Response(
+            content=path.read_bytes(),
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'inline; filename="revision-overlay.pdf"'},
+        )
 
     @app.get("/jobs/{job_id}/review", response_class=HTMLResponse)
     def review_page(request: Request, job_id: str):

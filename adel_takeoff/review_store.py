@@ -39,7 +39,7 @@ def review_path(data_dir: Path, job_id: str) -> Path:
 
 
 def empty_document() -> dict:
-    return {"added": [], "decisions": {}}
+    return {"added": [], "decisions": {}, "revision_checks": []}
 
 
 def load_document(path: Path) -> dict:
@@ -50,9 +50,14 @@ def load_document(path: Path) -> dict:
         return empty_document()
     decisions = data.get("decisions") or {}
     added = data.get("added") or []
-    if not isinstance(decisions, dict) or not isinstance(added, list):
+    checks = data.get("revision_checks") or []
+    if not isinstance(decisions, dict) or not isinstance(added, list) or not isinstance(checks, list):
         return empty_document()
-    return {"added": added, "decisions": decisions}
+    return {
+        "added": added,
+        "decisions": decisions,
+        "revision_checks": [str(item_id) for item_id in checks],
+    }
 
 
 def save_document(path: Path, document: dict) -> None:
@@ -63,6 +68,10 @@ def save_document(path: Path, document: dict) -> None:
             str(key): document["decisions"][key]
             for key in sorted(document.get("decisions") or {}, key=_id_sort)
         },
+        "revision_checks": sorted(
+            {str(item_id) for item_id in (document.get("revision_checks") or [])},
+            key=_id_sort,
+        ),
     }
     payload = json.dumps(normalized, indent=2, sort_keys=True) + "\n"
     temporary = path.with_suffix(".json.tmp")
@@ -172,6 +181,7 @@ def overlay_items(items: list[dict], document: dict) -> list[dict]:
     """Apply the review file. JSON wins when it names a decision."""
 
     decisions = document.get("decisions") or {}
+    checks = {str(item_id) for item_id in (document.get("revision_checks") or [])}
     ordered: list[dict] = []
     seen: set[str] = set()
     for item in items:
@@ -180,6 +190,8 @@ def overlay_items(items: list[dict], document: dict) -> list[dict]:
         item_id = str(copied["id"])
         copied["id"] = item_id
         _apply_decision(copied, decisions.get(item_id))
+        if item_id in checks:
+            copied["revision_check"] = True
         seen.add(item_id)
         ordered.append(copied)
     for record in document.get("added") or []:
@@ -217,6 +229,9 @@ def apply_decision(conn, data_dir: Path, job_id: str, item_id: str, action: str,
         document = load_document(review_path(data_dir, job_id))
     decision = decision_for_action(action, label, panel, circuit)
     document.setdefault("decisions", {})[str(item_id)] = decision
+    document["revision_checks"] = [
+        check for check in document.get("revision_checks") or [] if str(check) != str(item_id)
+    ]
     save_document(review_path(data_dir, job_id), document)
     update_item_review(conn, job_id, str(item_id), decision)
     return document

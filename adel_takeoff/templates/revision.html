@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Revision{% endblock %}
+{% block body %}
+<p class="nav"><a href="/jobs/{{ job.id }}">Job settings</a> · <a href="/jobs/{{ job.id }}/review">Review counts</a> · <a href="/jobs/{{ job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ job.id }}/scale">Scale</a> · <a href="/jobs/{{ job.id }}/export.xlsx">Download Excel</a></p>
+<h1>Revision</h1>
+<p class="note">This job is the previous drawing set until you upload the revision. Sheets match on sheet number. When the number changed, a unique title pairs them. Added, removed, and renumbered sheets are listed. Each matched sheet is aligned and diffed. Blue marks additions and red marks deletions. Clouds outline the change regions.</p>
+<p class="note">Takeoff counts are compared by tag, sheet, and area. An item that is still the same mark keeps its old item id. A review decision carries forward only when that item is unchanged. A changed item goes back to check. If alignment fails or the agreement is low, that sheet is refused and no colored diff or count delta is produced for it. Schedule row changes are still listed. This does not route conduit or create home runs.</p>
+{% if error %}
+<p class="error" id="form-error">{{ error }}</p>
+{% endif %}
+<form method="post" action="/jobs/{{ job.id }}/revision" enctype="multipart/form-data">
+  <label for="pdf">Revised drawing set</label>
+  <input id="pdf" name="pdf" type="file" accept="application/pdf,.pdf" required>
+  <button type="submit">Compare revision</button>
+</form>
+{% if revision.compared %}
+<p class="note" id="revision-status">Compared {{ revision.compared_at }}{% if revision.previous_name %} against {{ revision.previous_name }}{% endif %}. <a href="/jobs/{{ job.id }}/revision/overlay.pdf">Open the overlay PDF</a>.</p>
+{% if revision.sheets %}
+<h2>Sheets</h2>
+<div class="table-scroll">
+<table id="revision-sheets">
+  <thead>
+    <tr><th>Status</th><th>Previous</th><th>Revised</th><th>Alignment</th></tr>
+  </thead>
+  <tbody>
+    {% for sheet in revision.sheets %}
+    <tr>
+      <td>{{ sheet.status }}</td>
+      <td>{{ sheet.old_number }}{% if sheet.old_title %} — {{ sheet.old_title }}{% endif %}</td>
+      <td>{{ sheet.new_number }}{% if sheet.new_title %} — {{ sheet.new_title }}{% endif %}</td>
+      <td>
+        {% if sheet.alignment and sheet.alignment.ok %}
+        Aligned, agreement {{ "%.2f"|format(sheet.alignment.confidence) }}
+        {% elif sheet.alignment %}
+        <span class="warning">{{ sheet.alignment.reason }}</span>
+        {% else %}
+        —
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+<h2>Changes</h2>
+<div class="table-scroll">
+<table id="revision-changes">
+  <thead>
+    <tr>
+      <th>Sheet</th><th>Item</th><th>Tag</th><th>Area</th>
+      <th>Old qty</th><th>New qty</th><th>Delta</th><th>Source</th><th>Note</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for change in revision.changes %}
+    <tr>
+      <td>{{ change.sheet }}</td>
+      <td>{{ change.item }}</td>
+      <td>{{ change.tag }}</td>
+      <td>{{ change.area }}</td>
+      <td>{{ change.old_qty if change.old_qty is not none else "" }}</td>
+      <td>{{ change.new_qty if change.new_qty is not none else "" }}</td>
+      <td>{{ change.delta if change.delta is not none else "" }}</td>
+      <td>{{ change.source }}</td>
+      <td>{{ change.note }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="9">No revision changes</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="note" id="revision-empty">No previous drawing set was compared. The Excel Revision Changes sheet says the same until a revision is uploaded.</p>
+{% endif %}
+{% endblock %}

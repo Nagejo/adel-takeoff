@@ -92,3 +92,14 @@ SCHEDULE_HEADER_PHRASE_GAP_PT = 24.0
 # A discrepancy lowers a recorded confidence band to this cap. It does not
 # create a band when the detector recorded no score. low stays low.
 DISCREPANCY_CONFIDENCE_CAP = "check"
+
+# Revision alignment searches a translation of this many points. A sheet
+# that needs a larger shift, or that agrees below the minimum, is refused.
+ALIGNMENT_WINDOW_PT = 36
+ALIGNMENT_MIN_AGREEMENT = 0.72
+ALIGNMENT_ASPECT_TOLERANCE = 0.03
+
+# After that translation, the same label within the persist distance keeps
+# the old item id. The same panel, circuit, and a smaller move is unchanged.
+PERSIST_DISTANCE_PT = 18.0
+UNCHANGED_MOVE_PT = 6.0

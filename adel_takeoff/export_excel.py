@@ -234,6 +234,7 @@ def build_workbook(job: dict, items, allowances, rfis, claims) -> bytes:
     _write_materials(workbook, review["materials"])
     _write_labor(workbook, job, review["labor"], review.get("assembly_warning") or "")
     _write_measured(workbook, review.get("scales") or [], review.get("measurements") or [])
+    _write_revision(workbook, review.get("revision") or {})
 
     buffer = BytesIO()
     workbook.save(buffer)
@@ -504,6 +505,57 @@ def _write_measured(workbook: Workbook, sheets: list[dict], measurements: list[d
         for column, value in enumerate(values, start=1):
             sheet.cell(row_index, column, value if value is not None else None)
         row_index += 1
+
+
+def _write_revision(workbook: Workbook, revision: dict) -> None:
+    sheet = workbook.create_sheet("Revision Changes")
+    if not revision.get("compared"):
+        sheet["A1"] = revision.get("note") or "No previous drawing set was compared."
+    else:
+        sheet["A1"] = (
+            "Old and new quantities are the counted marks, grouped by tag, sheet, and area. "
+            "A changed item is flagged check on the review, including when the detector recorded no score. "
+            "That check is a revision flag. Review decisions carry forward only for unchanged items. "
+            "A refused alignment has no count diff."
+        )
+        if revision.get("previous_name"):
+            sheet["A2"] = f"Previous file: {revision['previous_name']}"
+    headers = [
+        "Sheet",
+        "Item",
+        "Tag",
+        "Area",
+        "Old qty",
+        "New qty",
+        "Delta",
+        "Source",
+        "Old item IDs",
+        "New item IDs",
+        "Note",
+    ]
+    for column, header in enumerate(headers, start=1):
+        cell = sheet.cell(4, column, header)
+        cell.font = Font(bold=True)
+    changes = revision.get("changes") or []
+    if not changes:
+        sheet.cell(5, 1, "No revision changes" if revision.get("compared") else None)
+        return
+    for index, change in enumerate(changes, start=5):
+        values = [
+            change.get("sheet") or None,
+            change.get("item") or None,
+            change.get("tag") or None,
+            change.get("area") or None,
+            change.get("old_qty"),
+            change.get("new_qty"),
+            change.get("delta"),
+            change.get("source") or None,
+            change.get("old_item_ids") or None,
+            change.get("new_item_ids") or None,
+            change.get("note") or None,
+        ]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(index, column, value if value != "" else None)
 
 
 def _write_labor(workbook: Workbook, job: dict, rows: list[dict], warning: str) -> None:

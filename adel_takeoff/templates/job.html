@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Job{% endblock %}
 {% block body %}
-<p class="nav"><a href="/">Upload</a> · <a href="/jobs/{{ job.id }}/review">Review counts</a> · <a href="/jobs/{{ job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ job.id }}/scale">Scale</a></p>
+<p class="nav"><a href="/">Upload</a> · <a href="/jobs/{{ job.id }}/review">Review counts</a> · <a href="/jobs/{{ job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ job.id }}/scale">Scale</a> · <a href="/jobs/{{ job.id }}/revision">Revision</a></p>
 <h1>{{ job.name }}</h1>
 {% if error %}
 <p class="error" id="form-error">{{ error }}</p>

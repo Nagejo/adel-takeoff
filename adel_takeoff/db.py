@@ -216,6 +216,12 @@ def save_takeoff(conn, job_id: str, result) -> None:
         )
 
 
+def clear_takeoff(conn, job_id: str) -> None:
+    conn.execute("DELETE FROM items WHERE job_id = ?", (job_id,))
+    conn.execute("DELETE FROM rfis WHERE job_id = ?", (job_id,))
+    conn.execute("DELETE FROM code_claims WHERE job_id = ?", (job_id,))
+
+
 def get_job(conn, job_id: str) -> dict | None:
     row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
     return _job_from_row(row) if row else None
