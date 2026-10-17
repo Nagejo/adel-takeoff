@@ -66,6 +66,9 @@ The legend is the stack of labeled symbols under the heading `SYMBOL LEGEND`. Ro
 - A scale or a schedule cell from low-confidence OCR. That reading stays unset and is listed to check. The same cutoff applies whether the words came from Tesseract or from Google Cloud Vision.
 - Fitting a detector from the benchmark. The harness scores the current takeoff. It does not train a model.
 - Scoring saved example-search rows on a fresh benchmark run. `benchmark` reads the PDF and runs takeoff again. An accepted example-search row in exported truth is a miss on that run when the legend did not find the same mark.
+- Choosing a note disposition for you. The estimator picks priced/included, excluded, clarification, an add or deduct alternate, RFI, or not applicable. Keyword hints cover the notes that changed the first real bid (empty telco/CATV PVC, low-voltage prewire, Romex with owner approval, a warranty term, field changes at no extra charge, and connecting other trades). They are hints, not a specification reader.
+- Filing an RFI with the GC. The Excel sheet and the `.docx` are the log. The `.docx` carries the company name and no street address.
+- Tracing a feeder graphic. The one-line comparison is panel names printed under a one-line or riser heading against the panel schedule names. A title-block scale is compared with a scale printed in the view. A missing scale stays on the scale page.
 
 ## Routing seam
 
@@ -103,6 +106,22 @@ python -m adel_takeoff export JOB_ID --out .
 python -m adel_takeoff benchmark benchmarks/synthetic-scheduled
 python -m adel_takeoff truth JOB_ID --out ~/adel-benchmarks/job-name
 ```
+
+## Notes, keynotes, and the RFI log
+
+Numbered lines under `GENERAL NOTES` or `KEYNOTES` become notes with a sheet and a point. The words can come from the PDF text layer or from OCR. A keynote tag such as `KN-1` is tied to that note and to the nearest mark within 72 points.
+
+Open the job's Notes page and set a disposition on every numbered general note. Until you do, the Excel export carries a warning and the Notes Disposition sheet lists the open notes.
+
+The Coordination page is one log. It gathers unlegended symbols, tags with no schedule row, plan-versus-schedule differences, a panel on the one-line or riser with no matching panel schedule, a title-block scale that disagrees with the view, a panel header circuit count that disagrees with the drawn circuits, notes you marked RFI, and rows you add by hand. Columns are id, sheet, location, item, question, why it matters, who answers (Engineer, Architect, ID, GC, or Owner), a suggested pricing assumption, and status.
+
+Download the same log from Excel (`RFI log`) or from `Download RFI log` (a `.docx` with no street address).
+
+```bash
+python -m adel_takeoff
+```
+
+Then open `/jobs/<id>/notes`, `/jobs/<id>/coordination`, `/jobs/<id>/export.xlsx`, and `/jobs/<id>/rfi.docx`.
 
 ## Accuracy benchmark
 

@@ -180,6 +180,9 @@ def build_workbook(job: dict, items, allowances, rfis, claims) -> bytes:
         sheet.cell(row_index, 2, "not applied")
     else:
         sheet.cell(row_index, 2, _number(review["totals"]["marked_up_total"]))
+    if review.get("notes_warning"):
+        row_index += 2
+        sheet.cell(row_index, 1, review["notes_warning"])
 
     excluded = workbook.create_sheet("Excluded")
     excluded_headers = [
@@ -233,6 +236,8 @@ def build_workbook(job: dict, items, allowances, rfis, claims) -> bytes:
     _write_systems(workbook, review.get("systems") or [])
     _write_scope_split(workbook, review.get("scope_split") or [])
     _write_discrepancies(workbook, review["discrepancies"])
+    _write_notes(workbook, review.get("notes") or [], review.get("notes_warning") or "")
+    _write_coordination(workbook, review.get("coordination") or [])
     _write_materials(workbook, review["materials"])
     _write_labor(workbook, job, review["labor"], review.get("assembly_warning") or "")
     _write_measured(workbook, review.get("scales") or [], review.get("measurements") or [])
@@ -793,3 +798,71 @@ def _decimal_or_none(value):
     if value is None or value == "":
         return None
     return Decimal(str(value))
+
+
+def _write_notes(workbook: Workbook, notes: list[dict], warning: str) -> None:
+    sheet = workbook.create_sheet("Notes Disposition")
+    sheet["A1"] = warning or "Every numbered general note on this sheet has a disposition."
+    headers = [
+        "Sheet",
+        "Number",
+        "Kind",
+        "Location",
+        "Text",
+        "Disposition",
+        "Suggested attention",
+        "Linked items",
+        "Source",
+    ]
+    for column, header in enumerate(headers, start=1):
+        cell = sheet.cell(3, column, header)
+        cell.font = Font(bold=True)
+    for index, note in enumerate(notes, start=4):
+        linked = ", ".join(
+            f"{item['id']} {item['label']}".strip() for item in note.get("linked") or []
+        )
+        values = [
+            note.get("sheet") or "",
+            note.get("number") or "",
+            note.get("kind") or "",
+            f"{note.get('x')}, {note.get('y')}",
+            note.get("text") or "",
+            note.get("disposition_label") or None,
+            note.get("why") or None,
+            linked or None,
+            "ocr check" if note.get("ocr_check") else (note.get("source") or "pdf"),
+        ]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(index, column, value if value is not None else None)
+
+
+def _write_coordination(workbook: Workbook, rows: list[dict]) -> None:
+    sheet = workbook.create_sheet("RFI log")
+    headers = [
+        "ID",
+        "Sheet",
+        "Location",
+        "Item",
+        "Question",
+        "Why it matters",
+        "Who answers",
+        "Suggested pricing assumption",
+        "Status",
+    ]
+    for column, header in enumerate(headers, start=1):
+        cell = sheet.cell(1, column, header)
+        cell.font = Font(bold=True)
+    for index, row in enumerate(rows, start=2):
+        values = [
+            row.get("id"),
+            row.get("sheet") or None,
+            row.get("location") or None,
+            row.get("item") or None,
+            row.get("question") or None,
+            row.get("why") or None,
+            row.get("who") or None,
+            row.get("assumption") or None,
+            row.get("status") or None,
+        ]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(index, column, value if value is not None else None)

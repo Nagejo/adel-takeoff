@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}RFI log{% endblock %}
+{% block body %}
+<p class="nav"><a href="/jobs/{{ review.job.id }}">Job settings</a> · <a href="/jobs/{{ review.job.id }}/review">Review counts</a> · <a href="/jobs/{{ review.job.id }}/notes">Notes</a> · <a href="/jobs/{{ review.job.id }}/export.xlsx">Download Excel</a> · <a href="/jobs/{{ review.job.id }}/rfi.docx">Download RFI log</a></p>
+<h1>Coordination and RFI log</h1>
+<p class="note">Auto-raised rows cover unlegended symbols, unscheduled tags, discrepancies, and notes marked RFI. Add a manual row when the question is not on the drawing yet.</p>
+{% if error %}
+<p class="error" id="form-error">{{ error }}</p>
+{% endif %}
+<table id="coordination-log">
+  <thead>
+    <tr>
+      <th>ID</th><th>Sheet</th><th>Location</th><th>Item</th><th>Question</th>
+      <th>Why it matters</th><th>Who answers</th><th>Suggested pricing assumption</th><th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in review.coordination %}
+    <tr id="log-{{ row.id }}" class="coordination-row">
+      <td>{{ row.id }}</td>
+      <td>{{ row.sheet }}</td>
+      <td>{{ row.location }}</td>
+      <td>{{ row.item }}</td>
+      <td>{{ row.question }}</td>
+      <td colspan="4">
+        <form method="post" action="/jobs/{{ review.job.id }}/coordination/{{ row.id }}">
+          <label>Why it matters <input name="why" type="text" value="{{ row.why }}"></label>
+          <label>Who answers
+            <select name="who">
+              {% for name in review.who_answers %}
+              <option value="{{ name }}" {% if row.who == name %}selected{% endif %}>{{ name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Suggested pricing assumption <input name="assumption" type="text" value="{{ row.assumption }}"></label>
+          <label>Status
+            <select name="status">
+              {% for name in review.coordination_statuses %}
+              <option value="{{ name }}" {% if row.status == name %}selected{% endif %}>{{ name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <button type="submit">Save</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="9">None yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<h2>Discrepancy notes</h2>
+<table id="discrepancy-notes">
+  <thead>
+    <tr><th>Category</th><th>Sheet</th><th>Item</th><th>Detail</th></tr>
+  </thead>
+  <tbody>
+    {% for row in review.drawing_discrepancies %}
+    <tr class="discrepancy-note" data-category="{{ row.category }}">
+      <td>{{ row.category }}</td>
+      <td>{{ row.sheet }}</td>
+      <td>{{ row.item }}</td>
+      <td>{{ row.detail }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4">None.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<h2>Add a manual entry</h2>
+<form method="post" action="/jobs/{{ review.job.id }}/coordination" class="coordination-form">
+  <label>Sheet <input name="sheet" type="text"></label>
+  <label>Location <input name="location" type="text"></label>
+  <label>Item <input name="item" type="text"></label>
+  <label>Question <input name="question" type="text" required></label>
+  <label>Why it matters <input name="why" type="text"></label>
+  <label>Who answers
+    <select name="who">
+      {% for name in review.who_answers %}
+      <option value="{{ name }}">{{ name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Suggested pricing assumption <input name="assumption" type="text"></label>
+  <label>Status
+    <select name="status">
+      {% for name in review.coordination_statuses %}
+      <option value="{{ name }}">{{ name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit">Add to log</button>
+</form>
+{% endblock %}
