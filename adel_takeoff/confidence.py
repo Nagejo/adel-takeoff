@@ -9,7 +9,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from adel_takeoff.constants import CONFIDENCE_CHECK_MIN, CONFIDENCE_HIGH_MIN
+from adel_takeoff.constants import (
+    CONFIDENCE_CHECK_MIN,
+    CONFIDENCE_HIGH_MIN,
+    DISCREPANCY_CONFIDENCE_CAP,
+)
+
+
+_BAND_RANK = {"low": 0, "check": 1, "high": 2}
 
 
 @dataclass(frozen=True)
@@ -42,6 +49,20 @@ def confidence_band(
     if score >= limits.check_min:
         return "check"
     return "low"
+
+
+def apply_discrepancy_cap(flag: str, cap: str = DISCREPANCY_CONFIDENCE_CAP) -> str:
+    """Lower a recorded band to the cap.
+
+    A blank flag stays blank. A band already at or below the cap stays as it
+    is, so a low score is not raised to check.
+    """
+
+    if flag not in _BAND_RANK or cap not in _BAND_RANK:
+        return flag or ""
+    if _BAND_RANK[flag] > _BAND_RANK[cap]:
+        return cap
+    return flag
 
 
 def combine_confidence(flags: list[str]) -> str:

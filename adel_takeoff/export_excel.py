@@ -9,7 +9,12 @@ from openpyxl import Workbook
 from openpyxl.styles import Font
 
 from adel_takeoff.confidence import ConfidenceThresholds
-from adel_takeoff.constants import CONTRACTOR, DISCLAIMER, LABOR_RATES
+from adel_takeoff.constants import (
+    CONTRACTOR,
+    DISCLAIMER,
+    DISCREPANCY_CONFIDENCE_CAP,
+    LABOR_RATES,
+)
 from adel_takeoff.costing import journeyman_warning
 from adel_takeoff.present import build_review
 
@@ -45,6 +50,15 @@ QUANTITY_HEADERS = [
     "Sheets",
     "Panel",
     "Circuit",
+    "Type",
+    "Type description",
+    "Mounting",
+    "Mounting height",
+    "Voltage",
+    "Circuit description",
+    "Breaker",
+    "Poles",
+    "Load",
     "Review flag",
     "Deduped",
     "Material unit cost",
@@ -87,11 +101,18 @@ def build_workbook(job: dict, items, allowances, rfis, claims) -> bytes:
     sheet["A9"] = (
         f"Confidence: high at or above {limits.high_min}, "
         f"check at or above {limits.check_min}, otherwise low. "
-        "Blank means the detector recorded no score."
+        "Blank means the detector recorded no score. "
+        f"A schedule discrepancy lowers a recorded flag to {DISCREPANCY_CONFIDENCE_CAP} "
+        "and does not create a flag when there is no score."
     )
     sheet["A10"] = (
         "Numbered marks on the PDF use the item id. "
         "A quantity line with one item uses that same id."
+    )
+    sheet["A11"] = (
+        "Fixture and panel schedule cells are copied onto the quantity lines. "
+        "A blank schedule cell was not printed. The effective quantity stays the plan count. "
+        "Where a schedule count differs, both numbers are on the Discrepancies sheet."
     )
 
     sheet["A12"] = "Labor rates"
@@ -201,6 +222,9 @@ def build_workbook(job: dict, items, allowances, rfis, claims) -> bytes:
     for claim in claims:
         claim_sheet.append([claim["statement"], claim["section"], claim["rendered"]])
 
+    _write_by_type(workbook, review["by_type"])
+    _write_discrepancies(workbook, review["discrepancies"])
+
     buffer = BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()
@@ -227,6 +251,15 @@ def _write_quantity_row(sheet, row_index: int, line: dict, rate_labels: dict) ->
         ", ".join(line["sheets"]),
         line["panel"],
         line["circuit"],
+        line.get("type_mark") or None,
+        line.get("type_description") or None,
+        line.get("mounting") or None,
+        line.get("mounting_height") or None,
+        line.get("voltage") or None,
+        line.get("circuit_description") or None,
+        line.get("breaker") or None,
+        line.get("poles") or None,
+        line.get("schedule_load") or None,
         line["link_flag"],
         "counted once" if line["deduped"] else "",
         _number(_decimal_or_none(line["material_unit_cost"])),
@@ -236,6 +269,70 @@ def _write_quantity_row(sheet, row_index: int, line: dict, rate_labels: dict) ->
     ]
     for column, value in enumerate(values, start=1):
         sheet.cell(row_index, column, value if value is not None else None)
+
+
+def _write_by_type(workbook: Workbook, rows: list[dict]) -> None:
+    sheet = workbook.create_sheet("By type")
+    sheet["A1"] = (
+        "Each row is one fixture type on one sheet. "
+        "Plan count on sheet counts devices drawn on that sheet. "
+        "Plan count all sheets counts each device once. "
+        "Adding the per-sheet counts can count an overlap device twice. "
+        "The schedule count is the number printed for the type, not a per-sheet number. "
+        "Comparison uses the unique device count."
+    )
+    headers = [
+        "Type",
+        "Type description",
+        "Sheet number",
+        "Floor",
+        "Plan count on sheet",
+        "Plan count all sheets",
+        "Schedule count",
+        "Voltage",
+        "Mounting",
+        "Mounting height",
+    ]
+    for column, header in enumerate(headers, start=1):
+        cell = sheet.cell(3, column, header)
+        cell.font = Font(bold=True)
+    for index, row in enumerate(rows, start=4):
+        values = [
+            row["type"],
+            row["type_description"] or None,
+            row["sheet_number"],
+            row["floor"] or None,
+            row["plan_count_on_sheet"],
+            row["plan_count_all_sheets"],
+            row["schedule_count"],
+            row["voltage"] or None,
+            row["mounting"] or None,
+            row["mounting_height"] or None,
+        ]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(index, column, value if value is not None else None)
+
+
+def _write_discrepancies(workbook: Workbook, rows: list[dict]) -> None:
+    sheet = workbook.create_sheet("Discrepancies")
+    sheet["A1"] = (
+        "Both numbers are recorded. A schedule count does not replace the plan count."
+    )
+    headers = ["Kind", "Detail", "Plan", "Schedule", "Item IDs", "Sheet number"]
+    for column, header in enumerate(headers, start=1):
+        cell = sheet.cell(2, column, header)
+        cell.font = Font(bold=True)
+    for index, row in enumerate(rows, start=3):
+        values = [
+            row["kind"],
+            row["detail"],
+            row["plan"] if row["plan"] != "" else None,
+            row["schedule"] if row["schedule"] != "" else None,
+            ", ".join(row["item_ids"]) or None,
+            row["sheet_number"] or None,
+        ]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(index, column, value if value is not None else None)
 
 
 def _decimal_or_none(value):

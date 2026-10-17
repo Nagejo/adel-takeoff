@@ -56,3 +56,17 @@ CONFIDENCE_CHECK_MIN = 0.60
 
 # Match lines are long strokes, not device marks.
 MIN_MATCH_LINE_PT = 80.0
+
+# A schedule header is the column line within this distance of the heading.
+# Data rows stay in the table while each next line starts within the row gap.
+# A larger gap is the next schedule, not another row.
+SCHEDULE_HEADER_WINDOW_PT = 56.0
+SCHEDULE_ROW_GAP_PT = 30.0
+
+# Words in one column title sit close together. A wider gap is the next column,
+# so MOUNTING and HEIGHT stay separate when the drawing gives them two columns.
+SCHEDULE_HEADER_PHRASE_GAP_PT = 24.0
+
+# A discrepancy lowers a recorded confidence band to this cap. It does not
+# create a band when the detector recorded no score. low stays low.
+DISCREPANCY_CONFIDENCE_CAP = "check"

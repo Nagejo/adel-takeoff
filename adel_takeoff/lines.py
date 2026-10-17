@@ -24,6 +24,10 @@ def method_label(method: str) -> str:
     return METHOD_LABELS.get(method, method)
 
 
+def _joined(members: list[dict], key: str) -> str:
+    return "; ".join(_unique(row.get(key) or "" for row in members))
+
+
 def _unique(values) -> list[str]:
     found: list[str] = []
     for value in values:
@@ -203,6 +207,15 @@ def line_from_members(members: list[dict], *, excluded_reason: str = "") -> dict
         "sheets": sheets,
         "panel": members[0].get("panel") or "",
         "circuit": members[0].get("circuit") or "",
+        "type_mark": _joined(members, "type_mark"),
+        "type_description": _joined(members, "type_description"),
+        "mounting": _joined(members, "mounting"),
+        "mounting_height": _joined(members, "mounting_height"),
+        "voltage": _joined(members, "voltage"),
+        "circuit_description": _joined(members, "circuit_description"),
+        "breaker": _joined(members, "breaker"),
+        "poles": _joined(members, "poles"),
+        "schedule_load": _joined(members, "schedule_load"),
         "link_flag": "; ".join(link_flags),
         "deduped": any(row.get("deduped") for row in members),
         "material_unit_cost": _same_number([row.get("material_unit_cost") for row in members]),
@@ -226,6 +239,7 @@ def quantity_lines(rows: list[dict]) -> list[dict]:
             row["category"],
             row.get("panel") or "",
             row.get("circuit") or "",
+            row.get("type_mark") or "",
             tuple(row.get("count_methods") or [row.get("count_method") or ""]),
         )
         if key not in index:
