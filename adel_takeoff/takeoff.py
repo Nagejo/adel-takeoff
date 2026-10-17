@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from adel_takeoff.classify import categorize
+from adel_takeoff.classify import classify_label
 from adel_takeoff.code_notes import CodeClaim, Rfi, analyze_drawing_text
 from adel_takeoff.constants import EXACT_MATCH_SCORE
 from adel_takeoff.extract import PageData, legend_entries, read_pdf
@@ -185,10 +185,11 @@ def run_takeoff(pdf_bytes: bytes) -> TakeoffResult:
             _occurrence(occurrence.cluster, pages_by_index[occurrence.cluster.page_index])
             for occurrence in device.occurrences
         ]
+        classified = classify_label(entry.label, entry.system)
         items.append(
             MeasuredItem(
                 label=entry.label,
-                category=categorize(entry.label),
+                category=classified.category,
                 measurement="matched",
                 measured_quantity=1,
                 sheets=device.sheets,

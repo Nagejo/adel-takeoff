@@ -230,6 +230,8 @@ def build_workbook(job: dict, items, allowances, rfis, claims) -> bytes:
         claim_sheet.append([claim["statement"], claim["section"], claim["rendered"]])
 
     _write_by_type(workbook, review["by_type"])
+    _write_systems(workbook, review.get("systems") or [])
+    _write_scope_split(workbook, review.get("scope_split") or [])
     _write_discrepancies(workbook, review["discrepancies"])
     _write_materials(workbook, review["materials"])
     _write_labor(workbook, job, review["labor"], review.get("assembly_warning") or "")
@@ -284,6 +286,85 @@ def _write_quantity_row(sheet, row_index: int, line: dict, rate_labels: dict) ->
     ]
     for column, value in enumerate(values, start=1):
         sheet.cell(row_index, column, value if value is not None else None)
+
+
+def _write_systems(workbook: Workbook, rows: list[dict]) -> None:
+    sheet = workbook.create_sheet("By system")
+    sheet["A1"] = (
+        "Each row is one device type on one floor. "
+        "Fire alarm is counted by device type and floor. "
+        "A blank floor means the sheet title did not print one. "
+        "The quantity is the detected count, including devices that stay by others."
+    )
+    headers = [
+        "System",
+        "Device type",
+        "Floor",
+        "Quantity",
+        "Sheet",
+        "Scope",
+        "Item IDs",
+    ]
+    for column, header in enumerate(headers, start=1):
+        cell = sheet.cell(3, column, header)
+        cell.font = Font(bold=True)
+    if not rows:
+        sheet.cell(4, 1, "No system counts")
+        return
+    for index, row in enumerate(rows, start=4):
+        values = [
+            row["system"],
+            row["device_label"],
+            row["floor"] or None,
+            row["quantity"],
+            ", ".join(row["sheets"]) or None,
+            row["scope"] or None,
+            ", ".join(row["item_ids"]),
+        ]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(index, column, value if value is not None else None)
+
+
+def _write_scope_split(workbook: Workbook, rows: list[dict]) -> None:
+    sheet = workbook.create_sheet("Scope Split")
+    sheet["A1"] = (
+        "EC is the electrical contractor. "
+        "By others names the vendor: AV/low-voltage integrator, FA vendor, or lighting control vendor. "
+        "Rough-in only keeps the box, ring, and sleeve, conduit, or pull string allowance with EC. "
+        "The device on a rough-in item stays by others. "
+        "Landscape lighting and lighting control default to by others."
+    )
+    headers = [
+        "System",
+        "Device type",
+        "Floor",
+        "Sheet",
+        "Quantity",
+        "Scope",
+        "Party",
+        "Item IDs",
+        "Note",
+    ]
+    for column, header in enumerate(headers, start=1):
+        cell = sheet.cell(3, column, header)
+        cell.font = Font(bold=True)
+    if not rows:
+        sheet.cell(4, 1, "No scoped devices")
+        return
+    for index, row in enumerate(rows, start=4):
+        values = [
+            row["system"],
+            row["device_label"],
+            row["floor"] or None,
+            row["sheet"] or None,
+            row["quantity"],
+            row["scope"],
+            row["party"],
+            ", ".join(row["item_ids"]),
+            row["note"],
+        ]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(index, column, value if value is not None else None)
 
 
 def _write_by_type(workbook: Workbook, rows: list[dict]) -> None:

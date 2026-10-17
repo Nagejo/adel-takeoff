@@ -67,6 +67,7 @@ class LegendEntry:
     page_index: int
     bbox: tuple[float, float, float, float]
     ambiguous: bool = False
+    system: str = ""
 
 
 @dataclass(frozen=True)
@@ -317,14 +318,41 @@ def _phrase_word(line: list[Word], phrase: tuple[str, ...]) -> int | None:
     return None
 
 
+_LEGEND_HEADINGS = (
+    (("FIRE", "ALARM", "LEGEND"), "fire_alarm"),
+    (("LOW", "VOLTAGE", "LEGEND"), "low_voltage"),
+    (("LIGHTING", "CONTROL", "LEGEND"), "lighting_control"),
+    (("CONTROLS", "LEGEND"), "controls"),
+    (("DATA", "LEGEND"), "low_voltage"),
+    (("SYMBOL", "LEGEND"), ""),
+    (("FA", "LEGEND"), "fire_alarm"),
+    (("LV", "LEGEND"), "low_voltage"),
+)
+
+
+def _legend_headings(words: list[Word]) -> list[tuple[Word, str]]:
+    """Each legend block keeps the system named in its heading."""
+
+    found: list[tuple[Word, str]] = []
+    for line in group_lines(words):
+        for phrase, system in _LEGEND_HEADINGS:
+            index = _phrase_word(line, phrase)
+            if index is not None:
+                found.append((line[index], system))
+                break
+    if not found:
+        for line in group_lines(words):
+            if len(line) == 1 and line[0].text.upper() == "LEGEND":
+                found.append((line[0], ""))
+    found.sort(key=lambda item: (item[0].y0, item[0].x0))
+    return found
+
+
 def _find_heading(words: list[Word]) -> Word | None:
-    for line in group_lines(words):
-        if _phrase_word(line, ("SYMBOL", "LEGEND")) is not None:
-            return line[0]
-    for line in group_lines(words):
-        if len(line) == 1 and line[0].text.upper() == "LEGEND":
-            return line[0]
-    return None
+    headings = _legend_headings(words)
+    if not headings:
+        return None
+    return headings[0][0]
 
 
 def _label_for(cluster: Cluster, words: list[Word]) -> str:
@@ -341,15 +369,10 @@ def _label_for(cluster: Cluster, words: list[Word]) -> str:
     return " ".join(word.text for word in chosen).strip()
 
 
-def legend_entries(page: PageData) -> list[LegendEntry]:
-    """Legend rows are labeled symbol clusters stacked under the legend heading."""
-
-    heading = _find_heading(page.words)
-    if heading is None:
-        return []
+def _rows_under_heading(page: PageData, heading: Word, next_y: float) -> list[tuple[Cluster, str]]:
     candidates = []
     for cluster in page.clusters:
-        if cluster.center[1] < heading.y0 - 4:
+        if cluster.center[1] < heading.y0 - 4 or cluster.center[1] >= next_y:
             continue
         if not (heading.x0 - 40 <= cluster.center[0] <= heading.x0 + 140):
             continue
@@ -366,28 +389,45 @@ def legend_entries(page: PageData) -> list[LegendEntry]:
         if gap > LEGEND_ROW_GAP_PT:
             break
         rows.append((cluster, label))
+    return rows
+
+
+def legend_entries(page: PageData) -> list[LegendEntry]:
+    """Legend rows are labeled symbol clusters stacked under a legend heading.
+
+    A fire alarm, low voltage, or controls heading keeps that system on the
+    symbol. A plain symbol legend leaves the system to the label.
+    """
+
+    headings = _legend_headings(page.words)
+    if not headings:
+        return []
     found: dict[tuple, LegendEntry] = {}
     order: list[tuple] = []
-    for cluster, label in rows:
-        fingerprint = cluster.fingerprint
-        if fingerprint in found:
-            previous = found[fingerprint]
+    for index, (heading, system) in enumerate(headings):
+        next_y = headings[index + 1][0].y0 if index + 1 < len(headings) else float("inf")
+        for cluster, label in _rows_under_heading(page, heading, next_y):
+            fingerprint = cluster.fingerprint
+            if fingerprint in found:
+                previous = found[fingerprint]
+                found[fingerprint] = LegendEntry(
+                    fingerprint=fingerprint,
+                    label=previous.label,
+                    page_index=previous.page_index,
+                    bbox=previous.bbox,
+                    ambiguous=True,
+                    system=previous.system,
+                )
+                continue
             found[fingerprint] = LegendEntry(
                 fingerprint=fingerprint,
-                label=previous.label,
-                page_index=previous.page_index,
-                bbox=previous.bbox,
-                ambiguous=True,
+                label=label,
+                page_index=page.index,
+                bbox=cluster.bbox,
+                ambiguous=False,
+                system=system,
             )
-            continue
-        found[fingerprint] = LegendEntry(
-            fingerprint=fingerprint,
-            label=label,
-            page_index=page.index,
-            bbox=cluster.bbox,
-            ambiguous=False,
-        )
-        order.append(fingerprint)
+            order.append(fingerprint)
     return [found[fingerprint] for fingerprint in order]
 
 

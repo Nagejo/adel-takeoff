@@ -205,6 +205,7 @@ def line_from_members(members: list[dict], *, excluded_reason: str = "") -> dict
             [row.get("assembly_labor_hours") for row in members]
         ),
         "assembly_rate_key": members[0].get("assembly_rate_key") or "",
+        "assembly_parts": list(members[0].get("assembly_parts") or []),
         "scope": members[0]["scope"],
         "measured": measured,
         "override": override,

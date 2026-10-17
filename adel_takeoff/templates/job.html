@@ -46,11 +46,26 @@
       <span>per hour</span>
     </div>
   </fieldset>
-  <fieldset>
-    <legend>Scope that is by others unless this job includes it</legend>
-    <label class="check"><input type="checkbox" name="include_landscape" value="yes" {% if job.include_landscape %}checked{% endif %}> This job includes landscape lighting</label>
-    <label class="check"><input type="checkbox" name="include_lighting_control" value="yes" {% if job.include_lighting_control %}checked{% endif %}> This job includes lighting control</label>
-    <p class="note">Left unchecked, landscape lighting and lighting control stay by others.</p>
+  <fieldset id="scope-flags">
+    <legend>Scope by system</legend>
+    <p class="note">By EC counts the device. By others leaves it with that vendor. Rough-in only counts the box, ring, and sleeve, conduit, or pull string; the device stays by others. Landscape lighting and lighting control default to by others.</p>
+    {% for key, label, party in [
+      ("scope_power", "Power", "EC"),
+      ("scope_lighting", "Lighting", "EC"),
+      ("scope_landscape", "Landscape lighting", "by others"),
+      ("scope_lighting_control", "Lighting control", "lighting control vendor"),
+      ("scope_low_voltage", "Low voltage and data", "AV/low-voltage integrator"),
+      ("scope_fire_alarm", "Fire alarm", "FA vendor"),
+      ("scope_controls", "Controls", "lighting control vendor")
+    ] %}
+    <label for="{{ key }}">{{ label }}
+      <select id="{{ key }}" name="{{ key }}">
+        <option value="ec" {% if job[key] == "ec" %}selected{% endif %}>by EC</option>
+        <option value="by_others" {% if job[key] == "by_others" %}selected{% endif %}>{% if party == "by others" %}by others{% else %}by others ({{ party }}){% endif %}</option>
+        <option value="rough_in" {% if job[key] == "rough_in" %}selected{% endif %}>rough-in only</option>
+      </select>
+    </label>
+    {% endfor %}
   </fieldset>
   <button type="submit">Save job</button>
 </form>

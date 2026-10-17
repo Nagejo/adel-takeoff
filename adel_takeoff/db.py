@@ -98,11 +98,37 @@ _ITEM_COLUMNS = {
 }
 
 
+_JOB_SCOPE_COLUMNS = {
+    "scope_power": "TEXT NOT NULL DEFAULT 'ec'",
+    "scope_lighting": "TEXT NOT NULL DEFAULT 'ec'",
+    "scope_landscape": "TEXT NOT NULL DEFAULT 'by_others'",
+    "scope_lighting_control": "TEXT NOT NULL DEFAULT 'by_others'",
+    "scope_low_voltage": "TEXT NOT NULL DEFAULT 'by_others'",
+    "scope_fire_alarm": "TEXT NOT NULL DEFAULT 'by_others'",
+    "scope_controls": "TEXT NOT NULL DEFAULT 'by_others'",
+}
+
+
 def _ensure_item_columns(conn: sqlite3.Connection) -> None:
     existing = {row[1] for row in conn.execute("PRAGMA table_info(items)")}
     for name, column_type in _ITEM_COLUMNS.items():
         if name not in existing:
             conn.execute(f"ALTER TABLE items ADD COLUMN {name} {column_type}")
+
+
+def _ensure_job_columns(conn: sqlite3.Connection) -> None:
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}
+    added_landscape = "scope_landscape" not in existing
+    added_control = "scope_lighting_control" not in existing
+    for name, column_type in _JOB_SCOPE_COLUMNS.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {column_type}")
+    if added_landscape:
+        conn.execute("UPDATE jobs SET scope_landscape = 'ec' WHERE include_landscape = 1")
+    if added_control:
+        conn.execute(
+            "UPDATE jobs SET scope_lighting_control = 'ec' WHERE include_lighting_control = 1"
+        )
 
 
 def connect(db_path: Path) -> sqlite3.Connection:
@@ -112,6 +138,7 @@ def connect(db_path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
     _ensure_item_columns(conn)
+    _ensure_job_columns(conn)
     return conn
 
 
@@ -269,7 +296,14 @@ def update_settings(conn, job_id: str, fields: dict) -> None:
             include_lighting_control = ?,
             code_fbc = ?,
             code_nec = ?,
-            code_basis = ?
+            code_basis = ?,
+            scope_power = ?,
+            scope_lighting = ?,
+            scope_landscape = ?,
+            scope_lighting_control = ?,
+            scope_low_voltage = ?,
+            scope_fire_alarm = ?,
+            scope_controls = ?
         WHERE id = ?
         """,
         (
@@ -284,6 +318,13 @@ def update_settings(conn, job_id: str, fields: dict) -> None:
             fields["code_fbc"],
             fields["code_nec"],
             fields["code_basis"],
+            fields["scope_power"],
+            fields["scope_lighting"],
+            fields["scope_landscape"],
+            fields["scope_lighting_control"],
+            fields["scope_low_voltage"],
+            fields["scope_fire_alarm"],
+            fields["scope_controls"],
             job_id,
         ),
     )

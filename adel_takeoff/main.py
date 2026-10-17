@@ -34,6 +34,7 @@ from adel_takeoff.assemblies import (
     starter_catalog_path,
     submission_to_overrides,
 )
+from adel_takeoff.classify import SCOPE_DEFAULTS, SCOPE_FIELDS, posted_scope
 from adel_takeoff.code_notes import edition_for
 from adel_takeoff.costing import MarkupRejected, parse_markup, parse_rate
 from adel_takeoff.db import (
@@ -230,6 +231,8 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
                 "job": loaded["job"],
                 "labor_rates": LABOR_RATES,
                 "error": error,
+                "scope_fields": SCOPE_FIELDS,
+                "scope_defaults": SCOPE_DEFAULTS,
                 "warning": build_review(
                     loaded["job"], loaded["items"], loaded["allowances"], loaded["rfis"], loaded["claims"]
                 )["totals"]["journeyman_warning"],
@@ -248,6 +251,13 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
         rate_apprentice: str = Form(...),
         include_landscape: str = Form(""),
         include_lighting_control: str = Form(""),
+        scope_power: str = Form(""),
+        scope_lighting: str = Form(""),
+        scope_landscape: str = Form(""),
+        scope_lighting_control: str = Form(""),
+        scope_low_voltage: str = Form(""),
+        scope_fire_alarm: str = Form(""),
+        scope_controls: str = Form(""),
     ):
         loaded = _load(job_id)
         try:
@@ -269,6 +279,8 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
                     "job": loaded["job"],
                     "labor_rates": LABOR_RATES,
                     "error": str(exc),
+                    "scope_fields": SCOPE_FIELDS,
+                    "scope_defaults": SCOPE_DEFAULTS,
                     "warning": build_review(
                         loaded["job"],
                         loaded["items"],
@@ -280,6 +292,23 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
                 status_code=400,
             )
         edition = edition_for(permit)
+        scopes = {
+            "scope_power": posted_scope(scope_power, checkbox_yes=False, default="ec"),
+            "scope_lighting": posted_scope(scope_lighting, checkbox_yes=False, default="ec"),
+            "scope_landscape": posted_scope(
+                scope_landscape,
+                checkbox_yes=include_landscape == "yes",
+                default="by_others",
+            ),
+            "scope_lighting_control": posted_scope(
+                scope_lighting_control,
+                checkbox_yes=include_lighting_control == "yes",
+                default="by_others",
+            ),
+            "scope_low_voltage": posted_scope(scope_low_voltage, checkbox_yes=False, default="by_others"),
+            "scope_fire_alarm": posted_scope(scope_fire_alarm, checkbox_yes=False, default="by_others"),
+            "scope_controls": posted_scope(scope_controls, checkbox_yes=False, default="by_others"),
+        }
         with session(db_path) as conn:
             update_settings(
                 conn,
@@ -291,11 +320,12 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
                     "rate_foreman": format(rates["foreman"], "f"),
                     "rate_pm": format(rates["pm"], "f"),
                     "rate_apprentice": format(rates["apprentice"], "f"),
-                    "include_landscape": include_landscape == "yes",
-                    "include_lighting_control": include_lighting_control == "yes",
+                    "include_landscape": scopes["scope_landscape"] == "ec",
+                    "include_lighting_control": scopes["scope_lighting_control"] == "ec",
                     "code_fbc": edition.fbc,
                     "code_nec": edition.nec,
                     "code_basis": edition.basis,
+                    **scopes,
                 },
             )
         return RedirectResponse(url=f"/jobs/{job_id}", status_code=303)

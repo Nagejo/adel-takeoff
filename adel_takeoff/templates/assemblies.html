@@ -4,7 +4,7 @@
 <p class="nav"><a href="/jobs/{{ job.id }}">Job settings</a> · <a href="/jobs/{{ job.id }}/review">Review counts</a> · <a href="/jobs/{{ job.id }}/scale">Scale</a> · <a href="/jobs/{{ job.id }}/revision">Revision</a> · <a href="/jobs/{{ job.id }}/export.xlsx">Download Excel</a></p>
 <div id="assemblies-intro">
   <h1>Assemblies</h1>
-  <p class="note">Each counted device expands into these parts. Quantity on the Materials sheet is the takeoff count times the per-unit quantity. Excluded and rejected devices are not expanded.</p>
+  <p class="note">Each counted device expands into these parts. Quantity on the Materials sheet is the takeoff count times the per-unit quantity. Excluded and rejected devices are not expanded. A rough-in-only scope expands to the box, ring, and sleeve, conduit, or pull string allowance. The device stays by others.</p>
   <p class="note">Starter file: <span id="starter-path">{{ starter_path }}</span></p>
   <p class="note">Job overrides: <span id="override-path">{{ override_path }}</span></p>
   {% if assembly_warning %}
