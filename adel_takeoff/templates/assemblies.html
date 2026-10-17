@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Assemblies{% endblock %}
 {% block body %}
-<p class="nav"><a href="/jobs/{{ job.id }}">Job settings</a> · <a href="/jobs/{{ job.id }}/review">Review counts</a> · <a href="/jobs/{{ job.id }}/scale">Scale</a> · <a href="/jobs/{{ job.id }}/revision">Revision</a> · <a href="/jobs/{{ job.id }}/export.xlsx">Download Excel</a></p>
+<p class="nav"><a href="/jobs/{{ job.id }}">Job settings</a> · <a href="/jobs/{{ job.id }}/review">Review counts</a> · <a href="/jobs/{{ job.id }}/scale">Scale</a> · <a href="/jobs/{{ job.id }}/revision">Revision</a> · <a href="/jobs/{{ job.id }}/search">Search</a> · <a href="/jobs/{{ job.id }}/export.xlsx">Download Excel</a></p>
 <div id="assemblies-intro">
   <h1>Assemblies</h1>
   <p class="note">Each counted device expands into these parts. Quantity on the Materials sheet is the takeoff count times the per-unit quantity. Excluded and rejected devices are not expanded. A rough-in-only scope expands to the box, ring, and sleeve, conduit, or pull string allowance. The device stays by others.</p>

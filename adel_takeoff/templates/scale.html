@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Scale{% endblock %}
 {% block body %}
-<p class="nav"><a href="/jobs/{{ job.id }}">Job settings</a> · <a href="/jobs/{{ job.id }}/review">Review counts</a> · <a href="/jobs/{{ job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ job.id }}/revision">Revision</a> · <a href="/jobs/{{ job.id }}/export.xlsx">Download Excel</a></p>
+<p class="nav"><a href="/jobs/{{ job.id }}">Job settings</a> · <a href="/jobs/{{ job.id }}/review">Review counts</a> · <a href="/jobs/{{ job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ job.id }}/revision">Revision</a> · <a href="/jobs/{{ job.id }}/search">Search</a> · <a href="/jobs/{{ job.id }}/export.xlsx">Download Excel</a></p>
 <h1>Scale</h1>
 <p class="note">A length is measured only where a scale was printed or set by hand. A missing scale, NTS, more than one scale that is not tied to a viewport, or a printed scale that disagrees with the graphic bar is refused. Raceway and conductor stay on the assembly allowance. This does not route conduit or create home runs.</p>
 <p class="note">Manual scales are stored in <span id="scale-path">{{ scale_path }}</span> with who set them and when.</p>

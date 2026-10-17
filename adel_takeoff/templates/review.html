@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Review{% endblock %}
 {% block body %}
-<p class="nav"><a href="/jobs/{{ review.job.id }}">Job settings</a> · <a href="/jobs/{{ review.job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ review.job.id }}/scale">Scale</a> · <a href="/jobs/{{ review.job.id }}/revision">Revision</a> · <a href="/jobs/{{ review.job.id }}/export.xlsx">Download Excel quantity report</a> · <a href="/jobs/{{ review.job.id }}/export.pdf">Download marked-up PDF</a></p>
+<p class="nav"><a href="/jobs/{{ review.job.id }}">Job settings</a> · <a href="/jobs/{{ review.job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ review.job.id }}/scale">Scale</a> · <a href="/jobs/{{ review.job.id }}/revision">Revision</a> · <a href="/jobs/{{ review.job.id }}/search">Search</a> · <a href="/jobs/{{ review.job.id }}/export.xlsx">Download Excel quantity report</a> · <a href="/jobs/{{ review.job.id }}/export.pdf">Download marked-up PDF</a></p>
 <h1>Review {{ review.job.name }}</h1>
 {% if review.totals.journeyman_warning %}
 <p class="warning" id="journeyman-warning">{{ review.totals.journeyman_warning }}</p>
@@ -59,6 +59,7 @@
         <th>Mounting height</th>
         <th>Count</th>
         <th>Sheet</th>
+        <th>Source</th>
         <th>Copied</th>
       </tr>
     </thead>
@@ -74,6 +75,7 @@
         <td>{{ row.mounting_height }}</td>
         <td>{{ row.count_text }}</td>
         <td>{{ row.sheet }}</td>
+        <td>{{ row.source }}{% if row.ocr_check %} check{% endif %}</td>
         <td>{% if row.used %}yes{% else %}no{% endif %}</td>
       </tr>
       {% endfor %}
@@ -94,6 +96,7 @@
         <th>Poles</th>
         <th>Load</th>
         <th>Sheet</th>
+        <th>Source</th>
         <th>Copied</th>
       </tr>
     </thead>
@@ -107,6 +110,7 @@
         <td>{{ row.poles }}</td>
         <td>{{ row.load }}</td>
         <td>{{ row.sheet }}</td>
+        <td>{{ row.source }}{% if row.ocr_check %} check{% endif %}</td>
         <td>{% if row.used %}yes{% else %}no{% endif %}</td>
       </tr>
       {% endfor %}

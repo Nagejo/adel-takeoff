@@ -18,7 +18,16 @@ import fitz
 
 from adel_takeoff.assemblies import data_dir_for_job
 from adel_takeoff.constants import POINTS_PER_INCH, SCALE_AGREEMENT_TOLERANCE
-from adel_takeoff.extract import Word, group_lines, page_words, read_sheet_title, sheet_name
+from adel_takeoff.extract import (
+    OCR_VALUE_NOTE,
+    Word,
+    group_lines,
+    is_low_ocr,
+    min_ocr_confidence,
+    page_words,
+    read_sheet_title,
+    sheet_name,
+)
 from adel_takeoff.scale_store import load_scales, scale_path
 
 
@@ -235,8 +244,12 @@ def _line_text(words: list[Word]) -> tuple[str, list[tuple[int, int, Word]]]:
     return "".join(parts), spans
 
 
+def _span_words(spans, start: int, end: int) -> list[Word]:
+    return [word for word_start, word_end, word in spans if word_end > start and word_start < end]
+
+
 def _bbox_for_span(spans, start: int, end: int) -> tuple[float, float, float, float] | None:
-    chosen = [word for word_start, word_end, word in spans if word_end > start and word_start < end]
+    chosen = _span_words(spans, start, end)
     if not chosen:
         return None
     return (
@@ -245,6 +258,17 @@ def _bbox_for_span(spans, start: int, end: int) -> tuple[float, float, float, fl
         max(word.x1 for word in chosen),
         max(word.y1 for word in chosen),
     )
+
+
+def _ocr_fields(words: list[Word]) -> dict:
+    if not any(word.source == "ocr" for word in words):
+        return {"text_source": "pdf", "ocr_check": False, "confidence": None}
+    low = any(is_low_ocr(word) for word in words)
+    return {
+        "text_source": "ocr",
+        "ocr_check": low,
+        "confidence": min_ocr_confidence(words),
+    }
 
 
 def _text_readings(words: list[Word], page_index: int) -> list[dict]:
@@ -256,18 +280,38 @@ def _text_readings(words: list[Word], page_index: int) -> list[dict]:
         if nts_spans and scale_spans:
             boxes = [_bbox_for_span(spans, match.start(), match.end()) for match in nts_spans + scale_spans]
             boxes = [box for box in boxes if box is not None]
-            readings.append(
-                _reading(
-                    kind="text",
-                    label=text,
-                    feet_per_point=None,
-                    nts=True,
-                    conflict=True,
-                    reason="The text states a scale and not to scale. Lengths are not measured.",
-                    bbox=_union(boxes),
-                    page_index=page_index,
+            involved = []
+            for match in nts_spans + scale_spans:
+                involved.extend(_span_words(spans, match.start(), match.end()))
+            ocr = _ocr_fields(involved)
+            if ocr["ocr_check"]:
+                readings.append(
+                    _reading(
+                        kind="text",
+                        label=text,
+                        feet_per_point=None,
+                        nts=False,
+                        conflict=False,
+                        reason=OCR_VALUE_NOTE,
+                        bbox=_union(boxes) if boxes else (0, 0, 0, 0),
+                        page_index=page_index,
+                        **ocr,
+                    )
                 )
-            )
+            else:
+                readings.append(
+                    _reading(
+                        kind="text",
+                        label=text,
+                        feet_per_point=None,
+                        nts=True,
+                        conflict=True,
+                        reason="The text states a scale and not to scale. Lengths are not measured.",
+                        bbox=_union(boxes) if boxes else (0, 0, 0, 0),
+                        page_index=page_index,
+                        **ocr,
+                    )
+                )
             continue
         if nts_spans and not scale_spans:
             for match in nts_spans:
@@ -275,6 +319,22 @@ def _text_readings(words: list[Word], page_index: int) -> list[dict]:
                 if box is None:
                     continue
                 parsed = parse_scale_text(match.group(0))
+                ocr = _ocr_fields(_span_words(spans, match.start(), match.end()))
+                if ocr["ocr_check"]:
+                    readings.append(
+                        _reading(
+                            kind="text",
+                            label=parsed.label if parsed else "not to scale",
+                            feet_per_point=None,
+                            nts=False,
+                            conflict=False,
+                            reason=OCR_VALUE_NOTE,
+                            bbox=box,
+                            page_index=page_index,
+                            **ocr,
+                        )
+                    )
+                    continue
                 readings.append(
                     _reading(
                         kind="text",
@@ -285,6 +345,7 @@ def _text_readings(words: list[Word], page_index: int) -> list[dict]:
                         reason="",
                         bbox=box,
                         page_index=page_index,
+                        **ocr,
                     )
                 )
             continue
@@ -292,6 +353,22 @@ def _text_readings(words: list[Word], page_index: int) -> list[dict]:
             parsed = parse_scale_text(match.group(0))
             box = _bbox_for_span(spans, match.start(), match.end())
             if parsed is None or box is None or parsed.feet_per_point is None:
+                continue
+            ocr = _ocr_fields(_span_words(spans, match.start(), match.end()))
+            if ocr["ocr_check"]:
+                readings.append(
+                    _reading(
+                        kind="text",
+                        label=parsed.label,
+                        feet_per_point=None,
+                        nts=False,
+                        conflict=False,
+                        reason=OCR_VALUE_NOTE,
+                        bbox=box,
+                        page_index=page_index,
+                        **ocr,
+                    )
+                )
                 continue
             readings.append(
                 _reading(
@@ -305,6 +382,7 @@ def _text_readings(words: list[Word], page_index: int) -> list[dict]:
                     reason="The text states more than one scale. Lengths are not measured." if parsed.conflict else "",
                     bbox=box,
                     page_index=page_index,
+                    **ocr,
                 )
             )
     return readings
@@ -345,6 +423,8 @@ def _graphic_bars(page, page_index: int) -> list[dict]:
         ]
         labeled = []
         for word in words:
+            if is_low_ocr(word):
+                continue
             feet = _bar_label(word.text)
             if feet is None:
                 continue
@@ -432,6 +512,9 @@ def _viewport_rects(page) -> list[tuple[float, float, float, float]]:
 def _reading(**fields) -> dict:
     fields.setdefault("numerator", None)
     fields.setdefault("denominator", None)
+    fields.setdefault("text_source", "pdf")
+    fields.setdefault("ocr_check", False)
+    fields.setdefault("confidence", None)
     return fields
 
 
@@ -486,7 +569,14 @@ def _public_reading(reading: dict) -> dict:
         "bbox": [round(float(value), 2) for value in reading["bbox"]],
         "nts": reading["nts"],
         "conflict": reading["conflict"],
+        "text_source": reading.get("text_source") or "pdf",
     }
+
+
+def _text_origin(group: list[dict]) -> str:
+    if any(reading.get("text_source") == "ocr" for reading in group):
+        return "ocr"
+    return "pdf"
 
 
 def _region(group: list[dict], applies_to: str, viewport_bbox, page_index: int) -> dict:
@@ -536,16 +626,19 @@ def _region(group: list[dict], applies_to: str, viewport_bbox, page_index: int) 
                 "Lengths are not measured."
             ),
         }
+    checks = [reading for reading in group if reading.get("ocr_check")]
     if nts and not texts and not bars:
         return {
             **base,
             "status": "nts",
-            "source": "text",
+            "source": "ocr" if _text_origin(group) == "ocr" else "text",
             "label": "not to scale",
             "feet_per_point": "",
             "numerator": None,
             "denominator": None,
             "reason": "This region is marked not to scale. Lengths are not measured.",
+            "confidence": "",
+            "ocr_confidence": None,
         }
     text_value = _one_value(texts)
     bar_value = _one_value(bars)
@@ -575,10 +668,25 @@ def _region(group: list[dict], applies_to: str, viewport_bbox, page_index: int) 
                 "viewports. Lengths are not measured."
             ),
         }
+    if checks and not texts and not bars:
+        return {
+            **base,
+            "status": "check",
+            "source": "ocr",
+            "label": checks[0]["label"],
+            "feet_per_point": "",
+            "numerator": None,
+            "denominator": None,
+            "reason": checks[0]["reason"] or OCR_VALUE_NOTE,
+            "confidence": "check",
+            "ocr_confidence": checks[0].get("confidence"),
+        }
     if not texts and not bars:
         return _missing_region(page_index, applies_to, viewport_bbox)
     chosen = texts[0] if texts else bars[0]
-    if texts and bars:
+    if texts and texts[0].get("text_source") == "ocr":
+        source = "ocr"
+    elif texts and bars:
         source = "text and graphic bar"
     elif texts:
         source = "text"
@@ -696,6 +804,12 @@ def _overall(regions: list[dict]) -> tuple[str, str]:
             "Scales are assigned per viewport. A region without one valid scale is not measured.",
         )
     return regions[0]["status"], " ".join(region["reason"] for region in regions if region["reason"])
+
+
+def regions_from_words(words: list[Word], page_index: int = 0) -> list[dict]:
+    """Scale regions from words alone. Graphic bars are read from the page drawing."""
+
+    return _build_regions(_text_readings(words, page_index), [], page_index)
 
 
 def assess_page(page, page_index: int, manual: dict | None = None) -> dict:
