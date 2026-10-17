@@ -15,6 +15,7 @@ METHOD_LABELS = {
     "legend_match": "legend match",
     "text_tag": "text tag",
     "manual_add": "manual add",
+    "symbol_search": "example match",
     "corrected_type": "corrected type",
     "unmatched": "unmatched geometry",
 }
@@ -268,6 +269,8 @@ def excluded_lines(rows: list[dict]) -> list[dict]:
     lines = []
     for row in rows:
         if row.get("effective") is not None:
+            continue
+        if row.get("status") == "pending" or row.get("review_status") == "pending":
             continue
         reason = exclusion_reason(row)
         lines.append(line_from_members([row], excluded_reason=reason))

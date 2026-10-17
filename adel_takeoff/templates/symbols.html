@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Symbols{% endblock %}
+{% block body %}
+<p class="nav"><a href="/jobs/{{ job.id }}">Job settings</a> · <a href="/jobs/{{ job.id }}/review">Review counts</a> · <a href="/jobs/{{ job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ job.id }}/scale">Scale</a> · <a href="/jobs/{{ job.id }}/revision">Revision</a> · <a href="/jobs/{{ job.id }}/search">Search</a> · <a href="/jobs/{{ job.id }}/export.xlsx">Download Excel</a></p>
+<h1>Symbol library</h1>
+<p class="note" id="symbol-note">The company library is shared by every job in this data folder. Starter symbols are drawn for this tool. Box one symbol on a sheet, or pick one from the library, and set the similarity cutoff. Each match is a traceable item with its score and confidence. A score below the high cutoff stays in review until you accept it. A mark on the plan that is missing from the legend is listed on the review page so it can be sent as an RFI.</p>
+{% if error %}<p class="warning" id="symbol-error">{{ error }}</p>{% endif %}
+{% if notice %}<p class="note" id="symbol-notice">{{ notice }}</p>{% endif %}
+
+<h2>Library</h2>
+<ul class="symbol-library" id="symbol-library">
+  {% for symbol in symbols %}
+  <li class="symbol-card" data-symbol="{{ symbol.id }}" data-origin="{{ symbol.origin }}">
+    <img src="/jobs/{{ job.id }}/symbols/{{ symbol.id }}.png" alt="{{ symbol.name }}">
+    <p><strong>{{ symbol.name }}</strong></p>
+    <p>{{ symbol.category }} · {{ symbol.tag }}</p>
+    <p>{% if symbol.assembly_id %}Assembly {{ symbol.assembly_id }}{% else %}No default assembly{% endif %}</p>
+  </li>
+  {% endfor %}
+</ul>
+
+<h2>Find matches</h2>
+<form method="post" action="/jobs/{{ job.id }}/symbols/search" class="symbol-form">
+  <label>Library symbol
+    <select name="symbol_id" id="library-symbol">
+      <option value="">Box a symbol instead</option>
+      {% for symbol in symbols %}
+      <option value="{{ symbol.id }}">{{ symbol.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Similarity cutoff
+    <input name="cutoff" id="cutoff" type="text" value="0.75">
+  </label>
+  <fieldset>
+    <legend>Or box one symbol on this job</legend>
+    <label>Page index
+      <input name="page_index" type="text" value="0">
+    </label>
+    <label>x0 <input name="x0" type="text"></label>
+    <label>y0 <input name="y0" type="text"></label>
+    <label>x1 <input name="x1" type="text"></label>
+    <label>y1 <input name="y1" type="text"></label>
+    <label>Name <input name="name" type="text"></label>
+    <label>Tag <input name="tag" type="text"></label>
+    <label>Category
+      <select name="category">
+        {% for category in categories %}
+        <option value="{{ category }}">{{ category }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Assembly <input name="assembly_id" type="text"></label>
+  </fieldset>
+  <button type="submit">Find matches</button>
+</form>
+
+<h2>Add a symbol from this job</h2>
+<form method="post" action="/jobs/{{ job.id }}/symbols" class="symbol-form" id="add-symbol">
+  <label>Name <input name="name" id="add-name" type="text" required></label>
+  <label>Category
+    <select name="category" id="add-category">
+      {% for category in categories %}
+      <option value="{{ category }}">{{ category }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Default tag <input name="tag" id="add-tag" type="text"></label>
+  <label>Default assembly <input name="assembly_id" id="add-assembly" type="text"></label>
+  <label>Page index <input name="page_index" id="add-page" type="text" value="0"></label>
+  <label>x0 <input name="x0" id="add-x0" type="text"></label>
+  <label>y0 <input name="y0" id="add-y0" type="text"></label>
+  <label>x1 <input name="x1" id="add-x1" type="text"></label>
+  <label>y1 <input name="y1" id="add-y1" type="text"></label>
+  <button type="submit">Add to library</button>
+</form>
+
+<h2>Matches on this job</h2>
+<table id="symbol-matches">
+  <thead>
+    <tr><th>ID</th><th>Tag</th><th>Sheet</th><th>Location</th><th>Score</th><th>Confidence</th><th>Review</th></tr>
+  </thead>
+  <tbody>
+    {% for row in matches %}
+    <tr data-score="{{ row.score }}" data-review="{{ row.review_status }}">
+      <td><a href="/jobs/{{ job.id }}/review#item-{{ row.id }}">{{ row.id }}</a></td>
+      <td>{{ row.label }}</td>
+      <td>{{ row.sheet }}</td>
+      <td>{{ row.location }}</td>
+      <td>{{ row.score }}</td>
+      <td>{{ row.confidence }}</td>
+      <td>{{ row.review_status }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

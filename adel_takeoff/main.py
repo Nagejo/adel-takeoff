@@ -164,6 +164,13 @@ def load_job(data_dir: Path, job_id: str) -> dict | None:
     }
 
 
+def _symbol_box(x0: str, y0: str, x1: str, y1: str) -> tuple[float, float, float, float]:
+    try:
+        return (float(x0), float(y0), float(x1), float(y1))
+    except ValueError as exc:
+        raise ValueError("The box coordinates must be numbers.") from exc
+
+
 def sheet_choices(pdf_bytes: bytes) -> list[dict]:
     document = fitz.open(stream=pdf_bytes, filetype="pdf")
     try:
@@ -834,6 +841,144 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return Response(content=payload, media_type="image/png")
+
+    @app.get("/jobs/{job_id}/symbols", response_class=HTMLResponse)
+    def symbols_page(request: Request, job_id: str, error: str = "", notice: str = ""):
+        from adel_takeoff.symbols import CATEGORIES, describe_matches, list_symbols
+
+        loaded = _load(job_id)
+        return TEMPLATES.TemplateResponse(
+            request,
+            "symbols.html",
+            {
+                "contractor": CONTRACTOR,
+                "disclaimer": DISCLAIMER,
+                "job": loaded["job"],
+                "symbols": list_symbols(root),
+                "matches": describe_matches(loaded["items"]),
+                "categories": CATEGORIES,
+                "error": error,
+                "notice": notice,
+            },
+        )
+
+    @app.get("/jobs/{job_id}/symbols/{symbol_id}.png")
+    def symbol_image(job_id: str, symbol_id: str):
+        from adel_takeoff.symbols import symbol_png
+
+        _load(job_id)
+        payload = symbol_png(root, symbol_id)
+        if payload is None:
+            raise HTTPException(status_code=404, detail="Symbol not found")
+        return Response(content=payload, media_type="image/png")
+
+    @app.post("/jobs/{job_id}/symbols")
+    def add_library_symbol(
+        job_id: str,
+        name: str = Form(""),
+        category: str = Form("other"),
+        tag: str = Form(""),
+        assembly_id: str = Form(""),
+        page_index: str = Form("0"),
+        x0: str = Form(""),
+        y0: str = Form(""),
+        x1: str = Form(""),
+        y1: str = Form(""),
+    ):
+        from urllib.parse import quote
+
+        from adel_takeoff.symbols import add_from_box
+
+        loaded = _load(job_id)
+        pdf_bytes = Path(loaded["job"]["pdf_path"]).read_bytes()
+        try:
+            add_from_box(
+                root,
+                pdf_bytes,
+                page_index=int(page_index),
+                box=_symbol_box(x0, y0, x1, y1),
+                name=name,
+                category=category,
+                tag=tag,
+                assembly_id=assembly_id,
+            )
+        except (ValueError, TypeError) as exc:
+            return RedirectResponse(
+                url=f"/jobs/{job_id}/symbols?error={quote(str(exc))}",
+                status_code=303,
+            )
+        return RedirectResponse(
+            url=f"/jobs/{job_id}/symbols?notice={quote('Added ' + name.strip() + ' to the company library.')}",
+            status_code=303,
+        )
+
+    @app.post("/jobs/{job_id}/symbols/search")
+    def search_symbols(
+        job_id: str,
+        cutoff: str = Form("0.75"),
+        symbol_id: str = Form(""),
+        name: str = Form(""),
+        category: str = Form("other"),
+        tag: str = Form(""),
+        assembly_id: str = Form(""),
+        page_index: str = Form(""),
+        x0: str = Form(""),
+        y0: str = Form(""),
+        x1: str = Form(""),
+        y1: str = Form(""),
+    ):
+        from urllib.parse import quote
+
+        from adel_takeoff.symbols import (
+            LibrarySymbol,
+            _category,
+            apply_matches,
+            get_symbol,
+            parse_cutoff,
+            template_from_box,
+        )
+
+        loaded = _load(job_id)
+        pdf_bytes = Path(loaded["job"]["pdf_path"]).read_bytes()
+        try:
+            parsed_cutoff = parse_cutoff(cutoff)
+            symbol = get_symbol(root, symbol_id) if symbol_id.strip() else None
+            if symbol is None:
+                if not any(part.strip() for part in (x0, y0, x1, y1)):
+                    raise ValueError("Pick a library symbol or box one symbol on the sheet.")
+                primitives, raster = template_from_box(
+                    pdf_bytes,
+                    int(page_index or "0"),
+                    _symbol_box(x0, y0, x1, y1),
+                )
+                label = " ".join((tag or name or "Boxed symbol").split())
+                symbol = LibrarySymbol(
+                    id="boxed",
+                    name=" ".join((name or label).split()),
+                    category=_category(category, label),
+                    tag=label,
+                    assembly_id=assembly_id.strip(),
+                    origin="box",
+                    primitives=primitives,
+                    raster=raster,
+                )
+            with session(db_path) as conn:
+                result = apply_matches(conn, job_id, pdf_bytes, symbol, parsed_cutoff)
+        except (ValueError, TypeError) as exc:
+            return RedirectResponse(
+                url=f"/jobs/{job_id}/symbols?error={quote(str(exc))}",
+                status_code=303,
+            )
+        notice = (
+            f"Found {result['hits']} match"
+            f"{'' if result['hits'] == 1 else 'es'} at cutoff {parsed_cutoff:.2f}. "
+            f"{result['inserted']} added, {result['updated']} unlegended marks updated, "
+            f"{result['kept']} already on the takeoff."
+        )
+        return RedirectResponse(
+            url=f"/jobs/{job_id}/symbols?notice={quote(notice)}",
+            status_code=303,
+        )
 
     @app.get("/jobs/{job_id}/export.xlsx")
     def export_excel(job_id: str):

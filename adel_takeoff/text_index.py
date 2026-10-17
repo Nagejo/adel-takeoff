@@ -14,7 +14,7 @@ from pathlib import Path
 
 import fitz
 
-from adel_takeoff.constants import OCR_DPI, OCR_PSM
+from adel_takeoff.constants import OCR_DPI
 from adel_takeoff.extract import Word, group_lines, legend_entries, read_pdf
 
 
@@ -94,8 +94,15 @@ def ocr_page_words(page) -> list[Word]:
 
 
 def _recognize(page) -> list[Word]:
+    """Read one page with the selected OCR backend.
+
+    Tesseract is the default. Google Cloud Vision is used when
+    GOOGLE_VISION_API_KEY is set. Confidence stays on a 0–1 scale.
+    """
+
+    from adel_takeoff.ocr import select_backend
+
     try:
-        import pytesseract
         from PIL import Image
     except ImportError as exc:
         raise ValueError(
@@ -104,34 +111,21 @@ def _recognize(page) -> list[Word]:
     zoom = OCR_DPI / 72
     pixmap = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
     image = Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples)
-    try:
-        data = pytesseract.image_to_data(
-            image,
-            output_type=pytesseract.Output.DICT,
-            config=f"--psm {OCR_PSM}",
-        )
-    except pytesseract.TesseractNotFoundError as exc:
-        raise ValueError(
-            "This page has no text layer. Install the Tesseract OCR program to read it."
-        ) from exc
     scale = 72 / OCR_DPI
     words: list[Word] = []
-    for index, raw in enumerate(data["text"]):
-        text = str(raw or "").strip()
-        if not text:
-            continue
-        try:
-            score = float(data["conf"][index])
-        except (TypeError, ValueError):
-            continue
-        if score < 0:
-            continue
-        x0 = float(data["left"][index]) * scale
-        y0 = float(data["top"][index]) * scale
-        x1 = x0 + float(data["width"][index]) * scale
-        y1 = y0 + float(data["height"][index]) * scale
+    for token in select_backend().recognize(image):
+        x0 = token.left * scale
+        y0 = token.top * scale
         words.append(
-            Word(x0, y0, x1, y1, text, source="ocr", confidence=round(score / 100, 4))
+            Word(
+                x0,
+                y0,
+                x0 + token.width * scale,
+                y0 + token.height * scale,
+                token.text,
+                source="ocr",
+                confidence=token.confidence,
+            )
         )
     return words
 
