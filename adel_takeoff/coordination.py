@@ -141,14 +141,24 @@ def drawing_discrepancies(
     schedule_rows: list[dict],
     panel_rows: list[dict],
     pdf_bytes: bytes | None,
+    overrides: dict | None = None,
 ) -> list[dict]:
     """One log of plan/schedule, riser, scale, and panel-header differences."""
 
+    from adel_takeoff.sheets import classify_pages
+
+    records = classify_pages(pages, overrides)
+
+    def indexes(step: str) -> set[int]:
+        return {row["page_index"] for row in records if step in (row.get("steps") or ())}
+
+    panel_pages = [page for page in pages if page.index in indexes("panel_schedule")]
+    riser_pages = [page for page in pages if page.index in indexes("riser")]
     found = [_from_schedule(row) for row in schedule_rows if row.get("kind") != _UNSCHEDULED]
-    found.extend(_panel_header_notes(pages, panel_rows))
-    found.extend(_riser_notes(pages, panel_rows))
+    found.extend(_panel_header_notes(panel_pages, panel_rows))
+    found.extend(_riser_notes(riser_pages, panel_rows))
     if pdf_bytes:
-        found.extend(_scale_notes(pages, pdf_bytes))
+        found.extend(_scale_notes(pages, pdf_bytes, indexes("scale")))
     return found
 
 
@@ -187,8 +197,17 @@ def build_log(
     return rows
 
 
-def coordination_packet(job: dict, rows: list[dict], pages: list[PageData], linked: dict, rfis) -> dict:
-    notes = parse_notes(pages)
+def coordination_packet(
+    job: dict,
+    rows: list[dict],
+    pages: list[PageData],
+    linked: dict,
+    rfis,
+    overrides: dict | None = None,
+) -> dict:
+    from adel_takeoff.sheets import pages_for_steps
+
+    notes = parse_notes(pages_for_steps(pages, ("notes",), overrides))
     link_keynotes(notes, rows)
     data_dir = data_dir_for_job(job)
     store = empty_store()
@@ -201,6 +220,7 @@ def coordination_packet(job: dict, rows: list[dict], pages: list[PageData], link
         linked.get("discrepancies") or [],
         linked.get("panel_rows") or [],
         pdf_bytes,
+        overrides,
     )
     return {
         "notes": notes,
@@ -469,11 +489,13 @@ def _riser_notes(pages: list[PageData], panel_rows: list[dict]) -> list[dict]:
     return found
 
 
-def _scale_notes(pages: list[PageData], pdf_bytes: bytes) -> list[dict]:
+def _scale_notes(pages: list[PageData], pdf_bytes: bytes, allowed: set[int] | None = None) -> list[dict]:
     document = fitz.open(stream=pdf_bytes, filetype="pdf")
     found = []
     try:
         for index, page in enumerate(document):
+            if allowed is not None and index not in allowed:
+                continue
             height = float(page.rect.height)
             readings = located_scale_readings(page, index)
             title = [

@@ -124,10 +124,10 @@ def load_thresholds(set_dir: Path) -> dict | None:
     return data
 
 
-def engine_items(pdf_bytes: bytes) -> tuple[list[dict], list[dict]]:
+def engine_items(pdf_bytes: bytes, cleanup: bool = False) -> tuple[list[dict], list[dict]]:
     """Return tagged predictions and unmatched marks from a fresh takeoff."""
 
-    result = run_takeoff(pdf_bytes)
+    result = run_takeoff(pdf_bytes, cleanup=cleanup)
     rows = []
     for item in result.items:
         rows.append(
@@ -171,11 +171,11 @@ def engine_items(pdf_bytes: bytes) -> tuple[list[dict], list[dict]]:
     return predicted, unmatched
 
 
-def score_set(set_dir: Path) -> Report:
+def score_set(set_dir: Path, cleanup: bool = False) -> Report:
     folder = Path(set_dir)
     pdf_path = find_pdf(folder)
     truth = load_truth(folder)
-    predicted, unmatched = engine_items(pdf_path.read_bytes())
+    predicted, unmatched = engine_items(pdf_path.read_bytes(), cleanup=cleanup)
     report = score_predictions(
         predicted,
         unmatched,
