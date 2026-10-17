@@ -142,6 +142,7 @@ def run_takeoff(pdf_bytes: bytes) -> TakeoffResult:
 
     instances: list[Instance] = []
     unmatched: list[MeasuredItem] = []
+    unlegended: list[tuple] = []
     for page in pages:
         for cluster in page.clusters:
             if (page.index, cluster.bbox) in template_boxes:
@@ -164,6 +165,7 @@ def run_takeoff(pdf_bytes: bytes) -> TakeoffResult:
                         "unmatched geometry; not counted",
                     )
                 )
+                unlegended.append((cluster, page))
                 continue
             instances.append(
                 Instance(
@@ -221,4 +223,17 @@ def run_takeoff(pdf_bytes: bytes) -> TakeoffResult:
         )
     for note in stitch_notes.rfis:
         rfis.append(Rfi(topic="Overlap", detail=note, sections="", disposition="rfi"))
+    for cluster, page in unlegended:
+        x0, y0, x1, y1 = cluster.bbox
+        rfis.append(
+            Rfi(
+                topic="Unlegended symbol",
+                detail=(
+                    f"A mark on {page.sheet} at ({(x0 + x1) / 2:.1f}, {(y0 + y1) / 2:.1f}) pt "
+                    "is on the plan and is missing from the legend. It can be sent as an RFI."
+                ),
+                sections="",
+                disposition="rfi",
+            )
+        )
     return TakeoffResult(items=items, rfis=rfis, code_claims=claims)

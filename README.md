@@ -42,6 +42,9 @@ This is an internal tool. It is not a product for other contractors. It is not D
 - Read a scanned sheet. A page with no usable text layer is rendered and read with Tesseract. Each word is kept with its box and confidence in `data/text/<job-id>.json`. A page that already has PDF text keeps that text. Title blocks, scale text, legend labels, and schedules use those words. Anything read by OCR is marked source `ocr`.
 - Low-confidence OCR does not set a scale or a schedule value on its own. That reading is withheld and sent to check. The cutoff is the same check cutoff in `adel_takeoff/constants.py`.
 - Search a tag, a panel name, or any other text across the set. Hits list the sheet and the location, and a hit opens on the sheet with the spot marked. The same hits are on the Excel Text search sheet.
+- Keep a company symbol library in `data/symbols/`. Every job in that data folder sees the same library. Each symbol has a name, a category, a default tag, a default assembly, and an example image. Starter symbols are drawn for this tool. Add another by boxing one symbol on any job. Nothing from a vendor symbol library is included.
+- Find that symbol across the set. Box one mark on a sheet, or pick one from the library, and set a similarity cutoff from 0 to 1. The comparison tries rotation in 45-degree steps, including the 90-degree turns, and the mirror of each rotation. Every match becomes a traceable item with its score and confidence band and goes through review. A score below the high cutoff (0.90) is not accepted and does not count until you accept it.
+- Flag a mark that is on the plan and missing from the legend. The review page lists it as an RFI so it can be sent out. The mark stays uncounted until a legend or an example match gives it a type.
 
 The legend is the stack of labeled symbols under the heading `SYMBOL LEGEND`. Rows more than 72 points apart are not treated as the same legend. Match lines need a shared key and one overlap depth, for example `MATCH LINE ML-A OVERLAP 120`.
 
@@ -59,8 +62,8 @@ The legend is the stack of labeled symbols under the heading `SYMBOL LEGEND`. Ro
 - A default markup.
 - A multi-contractor product.
 - Designing the fire alarm system, programming lighting or shade controls, or replacing the vendor's shop drawings. The count is by the printed symbol and the job's scope flag.
-- Symbol geometry from a scan. OCR reads the words. It does not invent a device mark, and a search hit does not add a takeoff item.
-- A scale or a schedule cell from low-confidence OCR. That reading stays unset and is listed to check.
+- A device count from OCR text. OCR reads words. A text search hit does not add a takeoff item. Symbol search is a separate step, and it compares a silhouette. It does not read a manufacturer's symbol library.
+- A scale or a schedule cell from low-confidence OCR. That reading stays unset and is listed to check. The same cutoff applies whether the words came from Tesseract or from Google Cloud Vision.
 
 ## Routing seam
 
@@ -74,7 +77,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Scanned sheets also need the Tesseract program (`tesseract` on PATH). Vector PDFs do not.
+Scanned sheets also need the Tesseract program (`tesseract` on PATH). Vector PDFs do not. Set `GOOGLE_VISION_API_KEY` to use Google Cloud Vision instead of Tesseract. With the variable unset, Tesseract stays the reader. Low-confidence words are withheld the same way either way.
 
 ```bash
 python -m adel_takeoff
@@ -82,7 +85,9 @@ python -m adel_takeoff
 
 Open http://127.0.0.1:8000
 
-Jobs are stored under `./data`. Review decisions are `data/reviews/<job-id>.json`. Assembly overrides are `data/assemblies/<job-id>.json`. The starter assemblies are `assemblies/starter.json`. Manual scales and measured lengths are `data/scales/<job-id>.json`. A revision compare is `data/revisions/<job-id>.json`, and the overlay PDF is `data/revisions/<job-id>-overlay.pdf`. The text index is `data/text/<job-id>.json`. Search from the job's Search page. The Excel download includes the Text search sheet and any OCR checks.
+Jobs are stored under `./data`. Review decisions are `data/reviews/<job-id>.json`. Assembly overrides are `data/assemblies/<job-id>.json`. The starter assemblies are `assemblies/starter.json`. Manual scales and measured lengths are `data/scales/<job-id>.json`. A revision compare is `data/revisions/<job-id>.json`, and the overlay PDF is `data/revisions/<job-id>-overlay.pdf`. The text index is `data/text/<job-id>.json`. Search from the job's Search page. The Excel download includes the Text search sheet and any OCR checks. The company symbol library is `data/symbols/`. Open a job's Symbols page to add a boxed symbol or to search the set. A match below the high confidence cutoff waits on the review page.
+
+To compare a symbol, upload the set, open Symbols, pick a library symbol or enter the box around one mark, and set the cutoff. Find matches. Accept or reject each new row on Review counts. A mark the legend does not name is already listed there as an RFI.
 
 To compare a revision, upload the previous set first, open that job, choose Revision, and upload the revised PDF. The job then becomes the revised set. Unchanged review decisions stay. Changed marks return to check. Download Excel for the Revision Changes sheet, or open the overlay PDF from the revision page.
 

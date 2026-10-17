@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Review{% endblock %}
 {% block body %}
-<p class="nav"><a href="/jobs/{{ review.job.id }}">Job settings</a> · <a href="/jobs/{{ review.job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ review.job.id }}/scale">Scale</a> · <a href="/jobs/{{ review.job.id }}/revision">Revision</a> · <a href="/jobs/{{ review.job.id }}/search">Search</a> · <a href="/jobs/{{ review.job.id }}/export.xlsx">Download Excel quantity report</a> · <a href="/jobs/{{ review.job.id }}/export.pdf">Download marked-up PDF</a></p>
+<p class="nav"><a href="/jobs/{{ review.job.id }}">Job settings</a> · <a href="/jobs/{{ review.job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ review.job.id }}/scale">Scale</a> · <a href="/jobs/{{ review.job.id }}/revision">Revision</a> · <a href="/jobs/{{ review.job.id }}/search">Search</a> · <a href="/jobs/{{ review.job.id }}/symbols">Symbols</a> · <a href="/jobs/{{ review.job.id }}/export.xlsx">Download Excel quantity report</a> · <a href="/jobs/{{ review.job.id }}/export.pdf">Download marked-up PDF</a></p>
 <h1>Review {{ review.job.name }}</h1>
 {% if review.totals.journeyman_warning %}
 <p class="warning" id="journeyman-warning">{{ review.totals.journeyman_warning }}</p>
@@ -220,6 +220,7 @@
         <form method="post" action="/jobs/{{ review.job.id }}/items/{{ row.id }}/review">
           <label>Decision
             <select name="action">
+              <option value="" {% if row.review_status == 'pending' %}selected{% endif %}>Needs review</option>
               <option value="accept" {% if row.review_status == 'accepted' and not row.exclusion %}selected{% endif %}>Accept</option>
               <option value="reject" {% if row.review_status == 'rejected' %}selected{% endif %}>Reject</option>
               <option value="correct" {% if row.review_status == 'corrected' %}selected{% endif %}>Correct type/tag</option>

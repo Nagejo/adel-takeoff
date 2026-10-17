@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS items (
     corrected_label TEXT,
     corrected_panel TEXT,
     corrected_circuit TEXT,
+    symbol_assembly TEXT NOT NULL DEFAULT '',
     FOREIGN KEY (job_id) REFERENCES jobs(id)
 );
 CREATE TABLE IF NOT EXISTS allowances (
@@ -95,6 +96,7 @@ _ITEM_COLUMNS = {
     "corrected_label": "TEXT",
     "corrected_panel": "TEXT",
     "corrected_circuit": "TEXT",
+    "symbol_assembly": "TEXT NOT NULL DEFAULT ''",
 }
 
 
@@ -199,7 +201,12 @@ def create_job(conn, *, name: str, pdf_path: str, rates: dict, edition: dict) ->
 
 
 def save_takeoff(conn, job_id: str, result) -> None:
+    taken = {str(row["id"]) for row in conn.execute("SELECT id FROM items")}
     for item in result.items:
+        item_id = str(item.item_id)
+        if item_id in taken:
+            item_id = f"{job_id}-{item.item_id}"
+        taken.add(item_id)
         conn.execute(
             """
             INSERT INTO items (
@@ -209,7 +216,7 @@ def save_takeoff(conn, job_id: str, result) -> None:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'journeyman', ?, ?, 'accepted', '')
             """,
             (
-                item.item_id,
+                item_id,
                 job_id,
                 item.label,
                 item.category,
@@ -422,8 +429,9 @@ def insert_manual_item(conn, job_id: str, item: dict) -> None:
         INSERT INTO items (
             id, job_id, label, category, measurement, measured_quantity,
             sheets_json, panel, circuit, link_flag, deduped, occurrences_json,
-            labor_rate_key, method, match_score, review_status, exclusion
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'journeyman', ?, NULL, ?, ?)
+            labor_rate_key, method, match_score, review_status, exclusion,
+            symbol_assembly
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'journeyman', ?, ?, ?, ?, ?)
         """,
         (
             item["id"],
@@ -438,7 +446,46 @@ def insert_manual_item(conn, job_id: str, item: dict) -> None:
             item.get("link_flag") or "",
             json.dumps(item["occurrences"]),
             item.get("method") or "manual_add",
+            score_text(item.get("match_score")),
             item.get("review_status") or "accepted",
             item.get("exclusion") or "",
+            item.get("symbol_assembly") or "",
+        ),
+    )
+
+
+def update_symbol_item(conn, job_id: str, item_id: str, item: dict) -> None:
+    """Turn an unlegended mark into an example match, keeping its id."""
+
+    conn.execute(
+        """
+        UPDATE items SET
+            label = ?,
+            category = ?,
+            measurement = ?,
+            measured_quantity = ?,
+            sheets_json = ?,
+            link_flag = ?,
+            occurrences_json = ?,
+            method = ?,
+            match_score = ?,
+            review_status = ?,
+            symbol_assembly = ?
+        WHERE id = ? AND job_id = ?
+        """,
+        (
+            item["label"],
+            item["category"],
+            item["measurement"],
+            item["measured_quantity"],
+            json.dumps(item["sheets"]),
+            item.get("link_flag") or "",
+            json.dumps(item["occurrences"]),
+            item.get("method") or "symbol_search",
+            score_text(item.get("match_score")),
+            item.get("review_status") or "pending",
+            item.get("symbol_assembly") or "",
+            item_id,
+            job_id,
         ),
     )

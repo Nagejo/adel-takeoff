@@ -307,6 +307,13 @@ def as_rough_in(assembly: Assembly | None) -> Assembly:
     )
 
 
+def _assembly_by_id(assemblies: list[Assembly], assembly_id: str) -> Assembly | None:
+    for assembly in assemblies:
+        if assembly.id == assembly_id:
+            return assembly
+    return None
+
+
 def match_assembly(label: str, assemblies: list[Assembly]) -> Assembly | None:
     """First matching assembly wins. The starter file lists specific names first."""
 
@@ -345,7 +352,10 @@ def apply_assemblies(rows: list[dict], job: dict, catalog: list[Assembly]) -> No
         row["assembly_rate_key"] = ""
         if row.get("effective") is None:
             continue
-        assembly = match_assembly(row.get("label") or "", catalog)
+        preferred = (row.get("symbol_assembly") or "").strip()
+        assembly = _assembly_by_id(catalog, preferred) if preferred else None
+        if assembly is None:
+            assembly = match_assembly(row.get("label") or "", catalog)
         if row.get("scope_mode") == "rough_in":
             assembly = as_rough_in(assembly)
         elif assembly is None:

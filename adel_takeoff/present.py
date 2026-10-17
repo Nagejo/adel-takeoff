@@ -88,6 +88,8 @@ def _decision_label(review_status: str, exclusion: str, status: str) -> str:
         return EXCLUSION_LABELS[exclusion]
     if review_status == "corrected":
         return "corrected"
+    if review_status == "pending":
+        return "pending"
     if status == "by_others":
         return "by others"
     if status == "unmatched":
@@ -152,6 +154,10 @@ def present_item(item: dict, job: dict) -> dict:
         scope_counted = False
     elif measurement != "matched" and not promoted:
         status = "unmatched"
+        effective = None
+        scope_counted = False
+    elif review_status == "pending":
+        status = "pending"
         effective = None
         scope_counted = False
     elif not counted_scope:
@@ -234,6 +240,7 @@ def present_item(item: dict, job: dict) -> dict:
         "direct_cost": direct,
         "show_correction": status == "counted",
         "method": method,
+        "symbol_assembly": item.get("symbol_assembly") or "",
         "count_method": count_method,
         "count_methods": count_methods,
         "detector_score": score,

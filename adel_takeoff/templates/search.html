@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Search{% endblock %}
 {% block body %}
-<p class="nav"><a href="/jobs/{{ job.id }}">Job settings</a> · <a href="/jobs/{{ job.id }}/review">Review counts</a> · <a href="/jobs/{{ job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ job.id }}/scale">Scale</a> · <a href="/jobs/{{ job.id }}/revision">Revision</a> · <a href="/jobs/{{ job.id }}/export.xlsx">Download Excel</a></p>
+<p class="nav"><a href="/jobs/{{ job.id }}">Job settings</a> · <a href="/jobs/{{ job.id }}/review">Review counts</a> · <a href="/jobs/{{ job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ job.id }}/scale">Scale</a> · <a href="/jobs/{{ job.id }}/revision">Revision</a> · <a href="/jobs/{{ job.id }}/symbols">Symbols</a> · <a href="/jobs/{{ job.id }}/export.xlsx">Download Excel</a></p>
 <h1>Search the set</h1>
 <p class="note" id="text-note">Find a tag, a panel name, or any other text. A page with no usable text layer is read by OCR. Those words keep a box and a confidence, and they are marked source ocr. A low-confidence OCR reading does not set a scale or a schedule value. It goes to check.</p>
 <form method="get" action="/jobs/{{ job.id }}/search" class="add-form">
