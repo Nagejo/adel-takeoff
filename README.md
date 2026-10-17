@@ -155,6 +155,24 @@ Then open `/jobs/<id>/sheets`.
 
 Sheet classes are not taken from a vendor library. There is no routing.
 
+## Estimator vs engine
+
+An estimator can put their own quantities next to the engine count. The engine count does not change.
+
+Import a CSV or Excel file of estimator quantities, then map the columns: item / tag, description, quantity, unit, system, and an optional sheet. Or import a submitted proposal as a CSV of line, description, qty, and unit price. When those proposal headers are unambiguous, the file is read without a second mapping step.
+
+Lines pair in order. An exact tag match (the item, or the engine type mark) wins when only one engine line has it. Otherwise an exact normalized description matches the same way. Otherwise token overlap can pair a line, and only when one engine line scores 0.90 or higher. A lower score is shown for review and stays unpaired until you confirm it on the Estimate page. Two engine lines that share a tag are not guessed.
+
+The comparison, and the Excel sheet `Estimator vs Engine`, lists both quantities, the delta (engine minus estimator), the delta at the estimator's unit price when one was imported, a status (`match`, `engine higher`, `estimator higher`, `only in estimator`, `only in engine`), and the sheet refs behind the engine count. The totals row splits the price delta into firm and needs-review.
+
+```bash
+python -m adel_takeoff
+```
+
+Then open `/jobs/<id>/estimate`.
+
+There is no vendor price book. Fuzzy overlap below 0.90 is not paired for you. There is no routing.
+
 ## Accuracy benchmark
 
 A set folder holds the drawing and the expected result:

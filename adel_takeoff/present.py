@@ -394,6 +394,9 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
     from adel_takeoff.coordination import coordination_packet
 
     packet = coordination_packet(job, rows, pages, linked, rfis, sheet_overrides)
+    from adel_takeoff.estimate import comparison_for_job
+
+    estimate = comparison_for_job(job, lines)
     return {
         "job": job,
         "rows": rows,
@@ -404,6 +407,7 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
         "zones": zones,
         "zone_rollups": zone_rollups(rows),
         "sheet_index": classify_pages(pages, sheet_overrides),
+        "estimate": estimate,
         "assembly_warning": assembly_warning(lines),
         "scales": scale_report["sheets"],
         "measurements": scale_report["measurements"],

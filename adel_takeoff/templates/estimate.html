@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Estimate{% endblock %}
+{% block body %}
+<style>
+  main { max-width: 1280px; }
+  #estimate-comparison td.status,
+  #estimate-comparison td.delta,
+  #estimate-comparison td.review-bucket { white-space: nowrap; }
+  #estimate-comparison td.desc { min-width: 12rem; }
+  tr.needs-review { background: #fff6e8; }
+</style>
+<p class="nav"><a href="/jobs/{{ review.job.id }}">Job settings</a> · <a href="/jobs/{{ review.job.id }}/review">Review counts</a> · <a href="/jobs/{{ review.job.id }}/export.xlsx">Download Excel</a></p>
+<h1>Estimator vs engine</h1>
+<p class="note" id="match-note">Match a line by tag, then by normalized description, then by token overlap. A fuzzy pair is saved automatically only when one engine line scores {{ review.estimate.threshold }} or higher. A lower score stays unpaired until you confirm it. Delta is the engine quantity minus the estimator quantity. The price delta uses the estimator's unit price when one was imported.</p>
+{% if error %}<p class="warning" id="estimate-error">{{ error }}</p>{% endif %}
+
+<h2>Import</h2>
+<form id="upload-form" class="estimate-form" method="post" action="/jobs/{{ review.job.id }}/estimate" enctype="multipart/form-data">
+  <label>File
+    <input type="file" name="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+  </label>
+  <label>Kind
+    <select name="kind" aria-label="Import kind">
+      <option value="quantities">Estimator quantities (CSV or Excel)</option>
+      <option value="proposal">Proposal unit prices (CSV)</option>
+    </select>
+  </label>
+  <button type="submit">Import</button>
+</form>
+<p class="note">Quantities need a column for item / tag, description, quantity, unit, system, and an optional sheet. A proposal is a CSV of line, description, qty, and unit price. Importing replaces the current file. The engine count does not change.</p>
+
+{% if review.estimate.present and not review.estimate.mapped %}
+<h2>Map columns</h2>
+<p class="note" id="mapping-note">File {{ review.estimate.source_name }}. Choose which column is which. Nothing is paired until you save this map.</p>
+<form id="mapping-form" class="estimate-form" method="post" action="/jobs/{{ review.job.id }}/estimate/map">
+  {% for field in review.estimate.fields %}
+  <label>{{ field.label }}{% if not field.required %} (optional){% endif %}
+    <select name="{{ field.key }}" aria-label="{{ field.label }}">
+      <option value="">Choose</option>
+      {% for header in review.estimate.header_labels %}
+      <option value="{{ loop.index0 }}" {% if field.selected == loop.index0 %}selected{% endif %}>{{ header }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% endfor %}
+  <button type="submit">Save mapping</button>
+</form>
+{% if review.estimate.preview %}
+<div class="table-scroll">
+<table id="import-preview">
+  <thead>
+    <tr>{% for header in review.estimate.header_labels %}<th>{{ header }}</th>{% endfor %}</tr>
+  </thead>
+  <tbody>
+    {% for row in review.estimate.preview %}
+    <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endif %}
+
+{% if review.estimate.mapped %}
+<h2>Comparison</h2>
+<p class="note">Source {{ review.estimate.source_name }}. Sheet refs are the sheets behind the engine count.</p>
+<dl class="totals">
+  <div><dt>Firm price delta</dt><dd id="firm-price-delta">{{ review.estimate.firm_price_delta }}</dd></div>
+  <div><dt>Needs-review price delta</dt><dd id="review-price-delta">{{ review.estimate.review_price_delta }}</dd></div>
+</dl>
+<div class="table-scroll">
+<table id="estimate-comparison">
+  <thead>
+    <tr>
+      <th>Estimator tag</th>
+      <th>Description</th>
+      <th>Estimator qty</th>
+      <th>Engine qty</th>
+      <th>Unit</th>
+      <th>Unit price</th>
+      <th>Delta</th>
+      <th>Price delta</th>
+      <th>Status</th>
+      <th>Firm or needs-review</th>
+      <th>Engine sheet refs</th>
+      <th>System</th>
+      <th>Pair</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in review.estimate.rows %}
+    <tr id="compare-{{ loop.index }}" data-status="{{ row.status }}" data-review="{{ row.review }}" data-method="{{ row.method }}" {% if row.review == 'needs-review' %}class="needs-review"{% endif %}>
+      <td>{{ row.tag }}</td>
+      <td class="desc">{{ row.description }}
+        {% if row.score %}<span class="pill">score {{ row.score }}</span>{% endif %}
+        {% if row.candidates %}
+        <span class="candidates">Candidates:
+          {% for candidate in row.candidates %}{{ candidate.label }}{% if candidate.score %} {{ candidate.score }}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}
+        </span>
+        {% endif %}
+      </td>
+      <td class="estimator-qty">{{ row.estimator_qty }}</td>
+      <td class="engine-qty">{{ row.engine_qty }}</td>
+      <td>{{ row.unit }}</td>
+      <td>{{ row.unit_price }}</td>
+      <td class="delta">{{ row.delta }}</td>
+      <td class="price-delta">{{ row.price_delta }}</td>
+      <td class="status">{{ row.status }}</td>
+      <td class="review-bucket">{{ row.review }}</td>
+      <td class="sheets">{{ row.sheets }}</td>
+      <td>{{ row.system }}</td>
+      <td>
+        {% if row.estimator_id and row.review == 'needs-review' %}
+        <form method="post" action="/jobs/{{ review.job.id }}/estimate/pair">
+          <input type="hidden" name="estimator_id" value="{{ row.estimator_id }}">
+          <select name="engine_line_id" aria-label="Pair {{ row.tag }}">
+            <option value="">Choose an engine line</option>
+            {% for choice in review.estimate.engine_choices %}
+            <option value="{{ choice.line_id }}" {% if choice.line_id == row.engine_line_id %}selected{% endif %}>{{ choice.label }} · {{ choice.quantity }}{% if choice.sheets %} · {{ choice.sheets }}{% endif %}{% if choice.paired_to and choice.paired_to != row.estimator_id %} (paired){% endif %}</option>
+            {% endfor %}
+          </select>
+          <button type="submit">Pair</button>
+        </form>
+        {% elif row.method == 'manual' %}
+        <form method="post" action="/jobs/{{ review.job.id }}/estimate/clear">
+          <input type="hidden" name="estimator_id" value="{{ row.estimator_id }}">
+          <button type="submit">Clear pair</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    <tr id="estimate-totals">
+      <td>Totals</td>
+      <td>Firm price delta {{ review.estimate.firm_price_delta }}. Needs-review price delta {{ review.estimate.review_price_delta }}.</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+{% elif not review.estimate.present %}
+<p class="note" id="estimate-empty">No estimator import yet.</p>
+{% endif %}
+{% endblock %}
