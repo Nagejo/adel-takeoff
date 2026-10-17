@@ -2,6 +2,7 @@
 {% block title %}Review{% endblock %}
 {% block body %}
 <p class="nav"><a href="/jobs/{{ review.job.id }}">Job settings</a> · <a href="/jobs/{{ review.job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ review.job.id }}/scale">Scale</a> · <a href="/jobs/{{ review.job.id }}/revision">Revision</a> · <a href="/jobs/{{ review.job.id }}/search">Search</a> · <a href="/jobs/{{ review.job.id }}/symbols">Symbols</a> · <a href="/jobs/{{ review.job.id }}/export.xlsx">Download Excel quantity report</a> · <a href="/jobs/{{ review.job.id }}/export.pdf">Download marked-up PDF</a></p>
+<p class="nav"><a id="benchmark-truth" href="/jobs/{{ review.job.id }}/truth.zip">Download benchmark truth</a></p>
 <h1>Review {{ review.job.name }}</h1>
 {% if review.totals.journeyman_warning %}
 <p class="warning" id="journeyman-warning">{{ review.totals.journeyman_warning }}</p>
@@ -37,6 +38,7 @@
   </tbody>
 </table>
 {% endif %}
+<p class="note" id="benchmark-note">Accepted, corrected, and added review decisions download as ground truth for a benchmark. Each kept mark becomes a sheet point and a tag total.</p>
 <p class="note" id="confidence-note">Confidence is high, check, or low only when the detector recorded a score. The cutoffs live in config. A blank confidence means there is no score. A manual add has no score. A schedule discrepancy lowers a recorded flag to {{ review.discrepancy_cap }} and does not create a flag when there is no score. A revision compare sets a changed item to check. That check is a revision flag, and it is applied even when the detector recorded no score. Counts are the marks that were detected or that you added, after review.</p>
 {% if review.assembly_warning %}
 <p class="{% if 'unconfirmed assembly' in review.assembly_warning|lower %}warning{% else %}note{% endif %}" id="assembly-warning">{{ review.assembly_warning }}</p>

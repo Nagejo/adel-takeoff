@@ -42,6 +42,20 @@ def main(argv: list[str] | None = None) -> None:
     export_cmd.add_argument("job_id")
     export_cmd.add_argument("--out", default=".")
 
+    benchmark = commands.add_parser(
+        "benchmark",
+        help="Score a plan set against its ground truth and write a scorecard",
+    )
+    benchmark.add_argument("set_dir")
+    benchmark.add_argument("--out", default="", help="Scorecard folder. Default is <set-dir>/scorecard")
+
+    truth = commands.add_parser(
+        "truth",
+        help="Export accepted, corrected, and added review decisions as benchmark truth",
+    )
+    truth.add_argument("job_id")
+    truth.add_argument("--out", required=True)
+
     args = parser.parse_args(argv)
     data_dir = Path(args.data_dir)
     if args.command == "takeoff":
@@ -52,6 +66,12 @@ def main(argv: list[str] | None = None) -> None:
         return
     if args.command == "export":
         _export(data_dir, args.job_id, Path(args.out))
+        return
+    if args.command == "benchmark":
+        _benchmark(Path(args.set_dir), Path(args.out) if args.out else None)
+        return
+    if args.command == "truth":
+        _truth(data_dir, args.job_id, Path(args.out))
         return
     _serve(data_dir, args.host, args.port)
 
@@ -149,6 +169,52 @@ def _export(data_dir: Path, job_id: str, out_dir: Path) -> None:
     )
     print(excel_path)
     print(pdf_path)
+
+
+def _benchmark(set_dir: Path, out_dir: Path | None) -> None:
+    from adel_takeoff.benchmark import BenchmarkError, load_thresholds, score_set, write_scorecard
+
+    try:
+        report = score_set(set_dir)
+        thresholds = load_thresholds(set_dir)
+    except BenchmarkError as exc:
+        raise SystemExit(str(exc)) from exc
+    markdown_path, excel_path = write_scorecard(report, out_dir or (set_dir / "scorecard"))
+    print(markdown_path)
+    print(excel_path)
+    print(f"precision {report.precision:.3f}")
+    print(f"recall {report.recall:.3f}")
+    print(f"count error {report.max_abs_count_error}")
+    print(f"schedule recall {report.schedule_recall:.3f}")
+    if thresholds and not report.passes(thresholds):
+        raise SystemExit(1)
+
+
+def _truth(data_dir: Path, job_id: str, out_dir: Path) -> None:
+    import shutil
+
+    from adel_takeoff.benchmark import documents_from_rows, write_truth_dir
+    from adel_takeoff.main import load_job
+    from adel_takeoff.present import build_review
+
+    loaded = load_job(data_dir, job_id)
+    if loaded is None:
+        raise SystemExit(f"Job {job_id} was not found")
+    review = build_review(
+        loaded["job"],
+        loaded["items"],
+        loaded["allowances"],
+        loaded["rfis"],
+        loaded["claims"],
+    )
+    documents = documents_from_rows(review["rows"])
+    if not documents:
+        raise SystemExit("This job has no accepted, corrected, or added items to export.")
+    write_truth_dir(out_dir, documents)
+    drawing = out_dir / "drawing.pdf"
+    if not drawing.exists():
+        shutil.copyfile(loaded["job"]["pdf_path"], drawing)
+    print(out_dir)
 
 
 if __name__ == "__main__":

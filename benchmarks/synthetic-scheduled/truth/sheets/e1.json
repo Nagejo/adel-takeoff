@@ -1,0 +1,99 @@
+{
+  "items": [
+    {
+      "category": "power",
+      "schedule": {
+        "circuit": "12",
+        "panel": "LP1"
+      },
+      "tag": "DUPLEX RECEPTACLE",
+      "x": 150.0,
+      "y": 160.0
+    },
+    {
+      "category": "landscape_lighting",
+      "schedule": {},
+      "tag": "LANDSCAPE LIGHT",
+      "x": 320.0,
+      "y": 160.0
+    },
+    {
+      "category": "lighting",
+      "schedule": {
+        "mounting": "WALL",
+        "mounting_height": "6'-0\"",
+        "type_mark": "B",
+        "voltage": "120"
+      },
+      "tag": "RECESSED LIGHT",
+      "x": 450.0,
+      "y": 200.0
+    },
+    {
+      "category": "power",
+      "schedule": {},
+      "tag": "DUPLEX RECEPTACLE",
+      "x": 150.0,
+      "y": 250.0
+    },
+    {
+      "category": "lighting_control",
+      "schedule": {},
+      "tag": "LIGHTING CONTROL",
+      "x": 320.0,
+      "y": 250.0
+    },
+    {
+      "category": "power",
+      "schedule": {
+        "circuit": "7",
+        "panel": "LP1"
+      },
+      "tag": "DUPLEX RECEPTACLE",
+      "x": 660.0,
+      "y": 300.0
+    },
+    {
+      "category": "lighting",
+      "schedule": {
+        "circuit": "4",
+        "mounting": "RECESSED",
+        "mounting_height": "9'-0\"",
+        "panel": "LP2",
+        "type_mark": "A",
+        "voltage": "120"
+      },
+      "tag": "RECESSED LIGHT",
+      "x": 150.0,
+      "y": 340.0
+    },
+    {
+      "category": "lighting",
+      "schedule": {
+        "type_mark": "Z"
+      },
+      "tag": "RECESSED LIGHT",
+      "x": 450.0,
+      "y": 400.0
+    },
+    {
+      "category": "power",
+      "schedule": {
+        "circuit": "1",
+        "panel": "LP9"
+      },
+      "tag": "SINGLE POLE SWITCH",
+      "x": 150.0,
+      "y": 430.0
+    },
+    {
+      "category": "other",
+      "schedule": {},
+      "tag": "PANELBOARD",
+      "x": 320.0,
+      "y": 520.0
+    }
+  ],
+  "sheet": "E1",
+  "tolerance_pt": 18.0
+}
