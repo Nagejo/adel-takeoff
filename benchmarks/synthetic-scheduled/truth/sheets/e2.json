@@ -1,0 +1,30 @@
+{
+  "items": [
+    {
+      "category": "power",
+      "schedule": {
+        "circuit": "7",
+        "panel": "LP1"
+      },
+      "tag": "DUPLEX RECEPTACLE",
+      "x": 112.0,
+      "y": 300.0
+    },
+    {
+      "category": "lighting",
+      "schedule": {
+        "circuit": "3",
+        "mounting": "RECESSED",
+        "mounting_height": "schedule: 9'-0\"; tag: 7'-0\"",
+        "panel": "HP1",
+        "type_mark": "A",
+        "voltage": "120"
+      },
+      "tag": "RECESSED LIGHT",
+      "x": 300.0,
+      "y": 200.0
+    }
+  ],
+  "sheet": "E2",
+  "tolerance_pt": 18.0
+}

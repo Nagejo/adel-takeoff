@@ -64,6 +64,8 @@ The legend is the stack of labeled symbols under the heading `SYMBOL LEGEND`. Ro
 - Designing the fire alarm system, programming lighting or shade controls, or replacing the vendor's shop drawings. The count is by the printed symbol and the job's scope flag.
 - A device count from OCR text. OCR reads words. A text search hit does not add a takeoff item. Symbol search is a separate step, and it compares a silhouette. It does not read a manufacturer's symbol library.
 - A scale or a schedule cell from low-confidence OCR. That reading stays unset and is listed to check. The same cutoff applies whether the words came from Tesseract or from Google Cloud Vision.
+- Fitting a detector from the benchmark. The harness scores the current takeoff. It does not train a model.
+- Scoring saved example-search rows on a fresh benchmark run. `benchmark` reads the PDF and runs takeoff again. An accepted example-search row in exported truth is a miss on that run when the legend did not find the same mark.
 
 ## Routing seam
 
@@ -98,7 +100,73 @@ python -m adel_takeoff takeoff drawing.pdf
 python -m adel_takeoff review JOB_ID --item 3 --action reject
 python -m adel_takeoff review JOB_ID --page 1 --x 420 --y 180 --label "DUPLEX RECEPTACLE"
 python -m adel_takeoff export JOB_ID --out .
+python -m adel_takeoff benchmark benchmarks/synthetic-scheduled
+python -m adel_takeoff truth JOB_ID --out ~/adel-benchmarks/job-name
 ```
+
+## Accuracy benchmark
+
+A set folder holds the drawing and the expected result:
+
+```text
+<set-dir>/
+  drawing.pdf
+  thresholds.json
+  truth/sheets/<sheet>.json
+  truth/totals/<tag>.json
+```
+
+`drawing.pdf` is the plan set. `set.pdf`, or the only PDF in the folder, is accepted too. Each sheet file lists the devices that should be found:
+
+```json
+{
+  "sheet": "E1",
+  "tolerance_pt": 18,
+  "items": [
+    {
+      "tag": "DUPLEX RECEPTACLE",
+      "category": "power",
+      "x": 150.0,
+      "y": 160.0,
+      "schedule": {"panel": "LP1", "circuit": "12"}
+    }
+  ]
+}
+```
+
+`x` and `y` are PDF points. A match is the same tag on that sheet, inside `tolerance_pt` (an item can set its own radius). `schedule` lists the printed values to check. Omitted fields are not checked. Recognized fields are panel, circuit, type mark, voltage, mounting, and mounting height.
+
+When only the count is known, skip the sheet files and add one totals file per tag:
+
+```json
+{ "tag": "DUPLEX RECEPTACLE", "category": "power", "quantity": 3 }
+```
+
+`thresholds.json` is optional. When it is present, the command writes the scorecard and then exits 1 if precision, recall, schedule recall, or the largest absolute count error misses the bar. That is what the pytest run uses, so a regression fails CI.
+
+```bash
+python -m adel_takeoff benchmark path/to/set
+```
+
+The scorecard is `path/to/set/scorecard/scorecard.md` and `scorecard.xlsx`. Pass `--out` to write them somewhere else. The Excel sheets are Summary, By tag, By sheet, By category, Totals, Missed, Extra, and Schedule. Precision, recall, and count error are reported per tag, sheet, and category when locations are known. Missed and extra rows include the sheet and the point. A mark with no tag is listed as unmatched and is left out of precision.
+
+Two synthetic sets live in the repo: `benchmarks/synthetic-scheduled` (points, schedule values, and totals) and `benchmarks/synthetic-totals` (totals only). Their drawings are generated for the tests. Real client drawings stay outside the repo. Point the same command at a folder on the estimator's machine:
+
+```bash
+python -m adel_takeoff benchmark ~/adel-benchmarks/riverside-school
+```
+
+Nothing in that folder is committed. Scorecard output under `benchmarks/**/scorecard/` is gitignored so a local run does not land in git either.
+
+### Build truth from a reviewed job
+
+Review the job, then export the decisions that should count:
+
+```bash
+python -m adel_takeoff truth JOB_ID --out ~/adel-benchmarks/riverside-school
+```
+
+Accepted marks, corrected tags, and added marks are written as `truth/sheets` and `truth/totals`. The job PDF is copied to `drawing.pdf` when that file is not already there. The review page link "Download benchmark truth" writes the same JSON, plus the drawing, as a zip. Rejected marks, pending example matches, excluded marks, and unmatched marks without a corrected tag stay out. That folder is then a benchmark set. Run `benchmark` on it the same way as the synthetic sets.
 
 ## Test
 

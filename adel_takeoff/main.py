@@ -980,6 +980,26 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
             status_code=303,
         )
 
+    @app.get("/jobs/{job_id}/truth.zip")
+    def export_truth(job_id: str):
+        from adel_takeoff.benchmark import truth_zip_bytes
+
+        loaded = _load(job_id)
+        review = build_review(
+            loaded["job"],
+            loaded["items"],
+            loaded["allowances"],
+            loaded["rfis"],
+            loaded["claims"],
+        )
+        pdf_bytes = Path(loaded["job"]["pdf_path"]).read_bytes()
+        payload = truth_zip_bytes(review["rows"], pdf_bytes)
+        return Response(
+            content=payload,
+            media_type="application/zip",
+            headers={"Content-Disposition": 'attachment; filename="benchmark-truth.zip"'},
+        )
+
     @app.get("/jobs/{job_id}/export.xlsx")
     def export_excel(job_id: str):
         loaded = _load(job_id)
