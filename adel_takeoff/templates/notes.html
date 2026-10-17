@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Notes{% endblock %}
+{% block body %}
+<p class="nav"><a href="/jobs/{{ review.job.id }}">Job settings</a> · <a href="/jobs/{{ review.job.id }}/review">Review counts</a> · <a href="/jobs/{{ review.job.id }}/coordination">RFI log</a> · <a href="/jobs/{{ review.job.id }}/export.xlsx">Download Excel</a> · <a href="/jobs/{{ review.job.id }}/rfi.docx">Download RFI log</a></p>
+<h1>Notes</h1>
+{% if review.notes_warning %}
+<p class="warning" id="notes-warning">{{ review.notes_warning }}</p>
+{% else %}
+<p class="note" id="notes-ready">Every numbered general note has a disposition.</p>
+{% endif %}
+<p class="note">Each numbered general note needs a disposition. The choices are priced / included, excluded, clarification, an add or deduct alternate, RFI, or not applicable. A keynote tag on the plan is tied to the note text and to the nearest mark.</p>
+<h2>General notes</h2>
+<table id="general-notes">
+  <thead>
+    <tr><th>Sheet</th><th>No.</th><th>Location</th><th>Text</th><th>Suggested attention</th><th>Disposition</th></tr>
+  </thead>
+  <tbody>
+    {% for note in review.notes if note.kind == 'general' %}
+    <tr id="note-{{ note.id }}" data-kind="general">
+      <td>{{ note.sheet }}</td>
+      <td>{{ note.number }}</td>
+      <td>{{ note.x }}, {{ note.y }}</td>
+      <td class="note-text">{{ note.text }}{% if note.ocr_check %} <span class="pill">ocr check</span>{% endif %}</td>
+      <td>{{ note.why }}</td>
+      <td>
+        <form method="post" action="/jobs/{{ review.job.id }}/notes/{{ note.id }}">
+          <select name="disposition" aria-label="Disposition for note {{ note.number }}">
+            <option value="">Needs a disposition</option>
+            {% for key, label in review.note_dispositions %}
+            <option value="{{ key }}" {% if note.disposition == key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit">Save disposition</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6">No numbered general notes.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<h2>Keynotes</h2>
+<table id="keynotes">
+  <thead>
+    <tr><th>Sheet</th><th>No.</th><th>Text</th><th>Tag</th><th>Linked items</th><th>Disposition</th></tr>
+  </thead>
+  <tbody>
+    {% for note in review.notes if note.kind == 'keynote' %}
+    <tr id="note-{{ note.id }}" data-kind="keynote">
+      <td>{{ note.sheet }}</td>
+      <td>{{ note.number }}</td>
+      <td class="note-text">{{ note.text }}</td>
+      <td>{% for tag in note.tags %}{{ tag.sheet }} {{ tag.x }}, {{ tag.y }}{% if not loop.last %}; {% endif %}{% endfor %}</td>
+      <td class="linked-items">{% for item in note.linked %}{{ item.id }} {{ item.label }}{% if not loop.last %}; {% endif %}{% else %}No nearby mark{% endfor %}</td>
+      <td>
+        <form method="post" action="/jobs/{{ review.job.id }}/notes/{{ note.id }}">
+          <select name="disposition" aria-label="Disposition for keynote {{ note.number }}">
+            <option value="">Needs a disposition</option>
+            {% for key, label in review.note_dispositions %}
+            <option value="{{ key }}" {% if note.disposition == key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit">Save disposition</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6">No keynotes.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

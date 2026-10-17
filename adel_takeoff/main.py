@@ -980,6 +980,153 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
             status_code=303,
         )
 
+    @app.get("/jobs/{job_id}/notes", response_class=HTMLResponse)
+    def notes_page(request: Request, job_id: str):
+        loaded = _load(job_id)
+        review = build_review(
+            loaded["job"],
+            loaded["items"],
+            loaded["allowances"],
+            loaded["rfis"],
+            loaded["claims"],
+        )
+        return TEMPLATES.TemplateResponse(
+            request,
+            "notes.html",
+            {"contractor": CONTRACTOR, "disclaimer": DISCLAIMER, "review": review},
+        )
+
+    @app.post("/jobs/{job_id}/notes/{note_id}")
+    def save_note_disposition(job_id: str, note_id: str, disposition: str = Form("")):
+        from adel_takeoff.coordination import CoordinationError, set_disposition
+
+        loaded = _load(job_id)
+        review = build_review(
+            loaded["job"],
+            loaded["items"],
+            loaded["allowances"],
+            loaded["rfis"],
+            loaded["claims"],
+        )
+        try:
+            set_disposition(
+                root,
+                job_id,
+                note_id,
+                disposition,
+                {note["id"] for note in review["notes"]},
+            )
+        except CoordinationError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        return RedirectResponse(url=f"/jobs/{job_id}/notes", status_code=303)
+
+    @app.get("/jobs/{job_id}/coordination", response_class=HTMLResponse)
+    def coordination_page(request: Request, job_id: str, error: str = ""):
+        loaded = _load(job_id)
+        review = build_review(
+            loaded["job"],
+            loaded["items"],
+            loaded["allowances"],
+            loaded["rfis"],
+            loaded["claims"],
+        )
+        return TEMPLATES.TemplateResponse(
+            request,
+            "coordination.html",
+            {
+                "contractor": CONTRACTOR,
+                "disclaimer": DISCLAIMER,
+                "review": review,
+                "error": error,
+            },
+        )
+
+    @app.post("/jobs/{job_id}/coordination")
+    def add_coordination_entry(
+        job_id: str,
+        sheet: str = Form(""),
+        location: str = Form(""),
+        item: str = Form(""),
+        question: str = Form(""),
+        why: str = Form(""),
+        who: str = Form("Engineer"),
+        assumption: str = Form(""),
+        status: str = Form("open"),
+    ):
+        from urllib.parse import quote
+
+        from adel_takeoff.coordination import CoordinationError, add_manual
+
+        _load(job_id)
+        try:
+            add_manual(
+                root,
+                job_id,
+                {
+                    "sheet": sheet,
+                    "location": location,
+                    "item": item,
+                    "question": question,
+                    "why": why,
+                    "who": who,
+                    "assumption": assumption,
+                    "status": status,
+                },
+            )
+        except CoordinationError as exc:
+            return RedirectResponse(
+                url=f"/jobs/{job_id}/coordination?error={quote(str(exc))}",
+                status_code=303,
+            )
+        return RedirectResponse(url=f"/jobs/{job_id}/coordination", status_code=303)
+
+    @app.post("/jobs/{job_id}/coordination/{entry_id}")
+    def save_coordination_entry(
+        job_id: str,
+        entry_id: str,
+        why: str = Form(""),
+        who: str = Form(""),
+        assumption: str = Form(""),
+        status: str = Form(""),
+    ):
+        from urllib.parse import quote
+
+        from adel_takeoff.coordination import CoordinationError, update_entry
+
+        _load(job_id)
+        try:
+            update_entry(
+                root,
+                job_id,
+                entry_id,
+                {"why": why, "who": who, "assumption": assumption, "status": status},
+            )
+        except CoordinationError as exc:
+            return RedirectResponse(
+                url=f"/jobs/{job_id}/coordination?error={quote(str(exc))}",
+                status_code=303,
+            )
+        return RedirectResponse(url=f"/jobs/{job_id}/coordination", status_code=303)
+
+    @app.get("/jobs/{job_id}/rfi.docx")
+    def export_rfi_docx(job_id: str):
+        from adel_takeoff.coordination import rfi_docx_bytes
+
+        loaded = _load(job_id)
+        review = build_review(
+            loaded["job"],
+            loaded["items"],
+            loaded["allowances"],
+            loaded["rfis"],
+            loaded["claims"],
+        )
+        payload = rfi_docx_bytes(loaded["job"]["name"], review["coordination"])
+        return Response(
+            content=payload,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": 'attachment; filename="adel-rfi-log.docx"'},
+        )
+
     @app.get("/jobs/{job_id}/truth.zip")
     def export_truth(job_id: str):
         from adel_takeoff.benchmark import truth_zip_bytes

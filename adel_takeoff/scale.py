@@ -812,6 +812,31 @@ def regions_from_words(words: list[Word], page_index: int = 0) -> list[dict]:
     return _build_regions(_text_readings(words, page_index), [], page_index)
 
 
+def located_scale_readings(page, page_index: int) -> list[dict]:
+    """Scales that were actually read, each with a point on the sheet.
+
+    A low-confidence OCR reading is withheld, the same way a scale value is.
+    """
+
+    found = []
+    readings = _text_readings(page_words(page), page_index) + _graphic_bars(page, page_index)
+    for reading in readings:
+        feet = reading.get("feet_per_point")
+        if feet is None or reading.get("conflict") or reading.get("ocr_check"):
+            continue
+        bbox = reading.get("bbox") or (0, 0, 0, 0)
+        found.append(
+            {
+                "label": reading.get("label") or "",
+                "kind": reading.get("kind") or "",
+                "feet_per_point": feet,
+                "x": round((float(bbox[0]) + float(bbox[2])) / 2, 2),
+                "y": round((float(bbox[1]) + float(bbox[3])) / 2, 2),
+            }
+        )
+    return found
+
+
 def assess_page(page, page_index: int, manual: dict | None = None) -> dict:
     words = page_words(page)
     readings = _text_readings(words, page_index) + _graphic_bars(page, page_index)

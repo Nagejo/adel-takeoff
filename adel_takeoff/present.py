@@ -250,6 +250,7 @@ def present_item(item: dict, job: dict) -> dict:
         "exclusion": exclusion,
         "decision_label": _decision_label(review_status, exclusion, status),
         "occurrences": occurrences,
+        "keynotes": [],
     }
     presented["how_counted"] = how_counted([presented])
     return presented
@@ -335,7 +336,8 @@ def _revision_for_job(job: dict) -> dict:
 
 def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, claims) -> dict:
     rows = sorted((present_item(item, job) for item in items), key=_id_key)
-    linked = attach_schedules(rows, _schedule_pages(job))
+    pages = _schedule_pages(job)
+    linked = attach_schedules(rows, pages)
     affected = {
         item_id
         for entry in linked["discrepancies"]
@@ -368,6 +370,9 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
         for row in rows
         if row["status"] == "unmatched" or row["link_flag"]
     ]
+    from adel_takeoff.coordination import coordination_packet
+
+    packet = coordination_packet(job, rows, pages, linked, rfis)
     return {
         "job": job,
         "rows": rows,
@@ -398,4 +403,5 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
         "text_query": text_index.get("query") or "",
         "text_hits": text_index.get("hits") or [],
         "ocr_checks": text_index.get("ocr_checks") or [],
+        **packet,
     }
