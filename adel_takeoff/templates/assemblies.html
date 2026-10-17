@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Assemblies{% endblock %}
+{% block body %}
+<p class="nav"><a href="/jobs/{{ job.id }}">Job settings</a> · <a href="/jobs/{{ job.id }}/review">Review counts</a> · <a href="/jobs/{{ job.id }}/export.xlsx">Download Excel</a></p>
+<div id="assemblies-intro">
+  <h1>Assemblies</h1>
+  <p class="note">Each counted device expands into these parts. Quantity on the Materials sheet is the takeoff count times the per-unit quantity. Excluded and rejected devices are not expanded.</p>
+  <p class="note">Starter file: <span id="starter-path">{{ starter_path }}</span></p>
+  <p class="note">Job overrides: <span id="override-path">{{ override_path }}</span></p>
+  {% if assembly_warning %}
+  <p class="warning" id="unconfirmed-assembly">{{ assembly_warning }}</p>
+  {% else %}
+  <p class="note" id="unconfirmed-assembly">No counted line uses an unconfirmed assembly.</p>
+  {% endif %}
+  {% if error %}
+  <p class="error" id="form-error">{{ error }}</p>
+  {% endif %}
+</div>
+<form method="post" action="/jobs/{{ job.id }}/assemblies" id="assembly-editor">
+  {% for assembly in assemblies %}
+  <fieldset class="assembly-block" id="assembly-{{ assembly.id }}">
+    <legend>{{ assembly.name }} <span class="pill">{{ assembly.version }}</span>{% if not assembly.confirmed %} <span class="pill">EXAMPLE</span>{% else %} <span class="pill">confirmed</span>{% endif %}</legend>
+    <p class="note">Matched from the device name. Labor hours are per unit, not a published labor standard.</p>
+    <label class="check">
+      <input type="checkbox" name="confirmed_{{ assembly.id }}" value="yes" {% if assembly.confirmed %}checked{% endif %}>
+      Estimator confirms these quantities and labor hours
+    </label>
+    <div class="rate-line">
+      <label for="labor_{{ assembly.id }}">Labor hours per unit</label>
+      <input id="labor_{{ assembly.id }}" name="labor_{{ assembly.id }}" type="text" value="{{ assembly.labor_hours }}">
+      <select name="rate_{{ assembly.id }}">
+        {% for key, name, default in labor_rates %}
+        <option value="{{ key }}" {% if assembly.labor_rate_key == key %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Part</th>
+          <th>Description</th>
+          <th>Per unit</th>
+          <th>Unit</th>
+          <th>Size</th>
+          <th>Conductor count</th>
+          <th>Allowance</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for part in assembly.parts %}
+        <tr>
+          <td>{{ part.role }}</td>
+          <td>{{ part.description }}</td>
+          <td><input name="qty_{{ assembly.id }}_{{ part.role }}" type="text" value="{{ part.quantity }}"></td>
+          <td>{{ part.unit }}</td>
+          <td><input name="size_{{ assembly.id }}_{{ part.role }}" type="text" value="{{ part.size }}"></td>
+          <td><input name="count_{{ assembly.id }}_{{ part.role }}" type="text" value="{{ part.count }}"></td>
+          <td>{% if part.allowance %}allowance{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </fieldset>
+  {% endfor %}
+  <button type="submit">Save assemblies</button>
+</form>
+{% endblock %}

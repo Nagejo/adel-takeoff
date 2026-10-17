@@ -5,6 +5,13 @@ from __future__ import annotations
 from decimal import Decimal
 from pathlib import Path
 
+from adel_takeoff.assemblies import (
+    apply_assemblies,
+    assembly_warning,
+    catalog_for_job,
+    labor_rows,
+    material_rows,
+)
 from adel_takeoff.classify import categorize, in_scope, scope_label
 from adel_takeoff.confidence import apply_discrepancy_cap, confidence_band
 from adel_takeoff.constants import DISCREPANCY_CONFIDENCE_CAP
@@ -164,6 +171,14 @@ def present_item(item: dict, job: dict) -> dict:
         "id": str(item["id"]),
         "label": label,
         "detected_label": detected_label,
+        "assembly_id": "",
+        "assembly_name": "",
+        "assembly_version": "",
+        "assembly_confirmed": False,
+        "assembly_example": False,
+        "assembly_hours_per_unit": None,
+        "assembly_labor_hours": None,
+        "assembly_rate_key": "",
         "category": category,
         "measurement": measurement,
         "measured": measured,
@@ -290,9 +305,12 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
     for row in rows:
         if row["id"] in affected:
             row["confidence"] = apply_discrepancy_cap(row["confidence"])
+    catalog = catalog_for_job(job)
+    apply_assemblies(rows, job, catalog)
     allowance_rows = [present_allowance(row, job) for row in allowances]
     totals = review_totals(rows, allowance_rows, job.get("markup"))
     totals["journeyman_warning"] = journeyman_warning(_decimal(job["rate_journeyman"]))
+    lines = quantity_lines(rows)
     unresolved = [
         row
         for row in rows
@@ -301,8 +319,11 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
     return {
         "job": job,
         "rows": rows,
-        "lines": quantity_lines(rows),
+        "lines": lines,
         "excluded": excluded_lines(rows),
+        "materials": material_rows(lines, catalog),
+        "labor": labor_rows(lines, job),
+        "assembly_warning": assembly_warning(lines),
         "allowances": allowance_rows,
         "rfis": rfis,
         "claims": claims,

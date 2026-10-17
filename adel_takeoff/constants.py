@@ -27,6 +27,21 @@ JOURNEYMAN_WARNING = (
     "in place. The estimator should confirm it."
 )
 
+# Starter assembly quantities and labor hours are examples. They are not a
+# published labor standard, and they are not priced until the estimator
+# confirms that assembly.
+UNCONFIRMED_ASSEMBLY_WARNING = (
+    "Unconfirmed assembly: starter per-unit quantities and labor hours are "
+    "examples. They are not a published labor standard. Raceway and conductor "
+    "lengths are allowances, not measured lengths. Example hours are not in "
+    "direct cost until the estimator confirms the assembly."
+)
+CONFIRMED_ASSEMBLY_NOTE = (
+    "Assemblies on counted lines were confirmed by the estimator. "
+    "They are not a published labor standard. "
+    "Raceway and conductor lengths are allowances, not measured lengths."
+)
+
 # Permits issued after this date use the next Florida code cycle.
 PERMIT_CODE_CUTOFF = date(2026, 12, 31)
 

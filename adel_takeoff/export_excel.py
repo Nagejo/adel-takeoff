@@ -35,6 +35,10 @@ QUANTITY_HEADERS = [
     "Line",
     "Item IDs",
     "Item",
+    "Assembly",
+    "Assembly version",
+    "Assembly labor hours",
+    "Assembly confirmed",
     "Category",
     "Scope",
     "Measured quantity",
@@ -115,8 +119,11 @@ def build_workbook(job: dict, items, allowances, rfis, claims) -> bytes:
         "Where a schedule count differs, both numbers are on the Discrepancies sheet."
     )
 
-    sheet["A12"] = "Labor rates"
-    rate_row = 13
+    sheet["A12"] = review.get("assembly_warning") or (
+        "No counted line uses an assembly."
+    )
+    sheet["A13"] = "Labor rates"
+    rate_row = 14
     stored = {
         "journeyman": job["rate_journeyman"],
         "foreman": job["rate_foreman"],
@@ -224,6 +231,8 @@ def build_workbook(job: dict, items, allowances, rfis, claims) -> bytes:
 
     _write_by_type(workbook, review["by_type"])
     _write_discrepancies(workbook, review["discrepancies"])
+    _write_materials(workbook, review["materials"])
+    _write_labor(workbook, job, review["labor"], review.get("assembly_warning") or "")
 
     buffer = BytesIO()
     workbook.save(buffer)
@@ -236,6 +245,10 @@ def _write_quantity_row(sheet, row_index: int, line: dict, rate_labels: dict) ->
         line["line_id"],
         ", ".join(line["item_ids"]),
         line["label"],
+        line.get("assembly_name") or None,
+        line.get("assembly_version") or None,
+        _number(_decimal_or_none(line.get("assembly_labor_hours"))),
+        "yes" if line.get("assembly_confirmed") else ("no" if line.get("assembly_id") else None),
         line["category"],
         line["scope"],
         line["measured"],
@@ -333,6 +346,125 @@ def _write_discrepancies(workbook: Workbook, rows: list[dict]) -> None:
         ]
         for column, value in enumerate(values, start=1):
             sheet.cell(index, column, value if value is not None else None)
+
+
+def _write_materials(workbook: Workbook, rows: list[dict]) -> None:
+    sheet = workbook.create_sheet("Materials")
+    sheet["A1"] = (
+        "Part quantity is the takeoff count times the assembly per-unit quantity. "
+        "Raceway and conductor lengths are allowances, not measured lengths. "
+        "Unconfirmed rows are examples and are not a published labor standard."
+    )
+    headers = [
+        "Assembly",
+        "Assembly version",
+        "Part",
+        "Description",
+        "Unit",
+        "Size",
+        "Conductor count",
+        "Allowance",
+        "Quantity",
+        "Source item IDs",
+        "Confirmed",
+    ]
+    for column, header in enumerate(headers, start=1):
+        cell = sheet.cell(3, column, header)
+        cell.font = Font(bold=True)
+    for index, row in enumerate(rows, start=4):
+        values = [
+            row["assembly"],
+            row["assembly_version"],
+            row["role"],
+            row["description"],
+            row["unit"],
+            row["size"] or None,
+            row["conductor_count"] or None,
+            row["allowance"] or None,
+            _number(row["quantity"]),
+            ", ".join(row["item_ids"]),
+            "yes" if row["confirmed"] else "no",
+        ]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(index, column, value if value is not None else None)
+
+
+def _write_labor(workbook: Workbook, job: dict, rows: list[dict], warning: str) -> None:
+    sheet = workbook.create_sheet("Labor")
+    sheet["A1"] = warning or "No counted line uses an assembly."
+    sheet["A2"] = (
+        "Rates are separate lines. Assembly hours are the takeoff count times "
+        "the hours per unit. Confirmed hours are in direct cost. Example hours are not."
+    )
+    sheet["A4"] = "Labor rates"
+    sheet["A4"].font = Font(bold=True)
+    stored = {
+        "journeyman": job["rate_journeyman"],
+        "foreman": job["rate_foreman"],
+        "pm": job["rate_pm"],
+        "apprentice": job["rate_apprentice"],
+    }
+    rate_row = 5
+    for key, label, _default in LABOR_RATES:
+        sheet.cell(rate_row, 1, label)
+        sheet.cell(rate_row, 2, float(Decimal(stored[key])))
+        sheet.cell(rate_row, 3, "per hour")
+        rate_row += 1
+    sheet.cell(rate_row, 1, journeyman_warning(Decimal(job["rate_journeyman"])) or None)
+
+    header_row = rate_row + 2
+    headers = [
+        "Line",
+        "Item IDs",
+        "Item",
+        "Assembly",
+        "Assembly version",
+        "Count",
+        "Hours per unit",
+        "Hours",
+        "Rate",
+        "Confirmed",
+        "Direct labor",
+    ]
+    for column, header in enumerate(headers, start=1):
+        cell = sheet.cell(header_row, column, header)
+        cell.font = Font(bold=True)
+    total_hours = Decimal("0")
+    confirmed_hours = Decimal("0")
+    direct = Decimal("0")
+    row_index = header_row + 1
+    for row in rows:
+        hours = row["hours"] if row["hours"] is not None else Decimal("0")
+        total_hours += hours
+        if row["confirmed"]:
+            confirmed_hours += hours
+            if row["direct_labor"] is not None:
+                direct += row["direct_labor"]
+        values = [
+            row["line_id"],
+            ", ".join(row["item_ids"]),
+            row["item"],
+            row["assembly"],
+            row["assembly_version"],
+            row["count"],
+            _number(row["hours_per_unit"]),
+            _number(row["hours"]),
+            row["rate"],
+            "yes" if row["confirmed"] else "no",
+            _number(row["direct_labor"]),
+        ]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(row_index, column, value if value is not None else None)
+        row_index += 1
+    row_index += 1
+    sheet.cell(row_index, 1, "Example and confirmed hours")
+    sheet.cell(row_index, 2, _number(total_hours))
+    row_index += 1
+    sheet.cell(row_index, 1, "Confirmed hours")
+    sheet.cell(row_index, 2, _number(confirmed_hours))
+    row_index += 1
+    sheet.cell(row_index, 1, "Confirmed direct labor")
+    sheet.cell(row_index, 2, _number(direct))
 
 
 def _decimal_or_none(value):
