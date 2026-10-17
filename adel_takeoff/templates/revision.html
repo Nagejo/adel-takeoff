@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Revision{% endblock %}
 {% block body %}
-<p class="nav"><a href="/jobs/{{ job.id }}">Job settings</a> · <a href="/jobs/{{ job.id }}/review">Review counts</a> · <a href="/jobs/{{ job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ job.id }}/scale">Scale</a> · <a href="/jobs/{{ job.id }}/export.xlsx">Download Excel</a></p>
+<p class="nav"><a href="/jobs/{{ job.id }}">Job settings</a> · <a href="/jobs/{{ job.id }}/review">Review counts</a> · <a href="/jobs/{{ job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ job.id }}/scale">Scale</a> · <a href="/jobs/{{ job.id }}/search">Search</a> · <a href="/jobs/{{ job.id }}/export.xlsx">Download Excel</a></p>
 <h1>Revision</h1>
 <p class="note">This job is the previous drawing set until you upload the revision. Sheets match on sheet number. When the number changed, a unique title pairs them. Added, removed, and renumbered sheets are listed. Each matched sheet is aligned and diffed. Blue marks additions and red marks deletions. Clouds outline the change regions.</p>
 <p class="note">Takeoff counts are compared by tag, sheet, and area. An item that is still the same mark keeps its old item id. A review decision carries forward only when that item is unchanged. A changed item goes back to check. If alignment fails or the agreement is low, that sheet is refused and no colored diff or count delta is produced for it. Schedule row changes are still listed. This does not route conduit or create home runs.</p>

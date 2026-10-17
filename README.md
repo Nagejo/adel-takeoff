@@ -39,6 +39,9 @@ This is an internal tool. It is not a product for other contractors. It is not D
 - Compare a revised drawing set with the previous one from the job's Revision page. Sheets match on sheet number. A unique printed title pairs a sheet whose number changed. Added, removed, and renumbered sheets are reported. Each matched sheet is aligned and diffed. The overlay PDF marks additions in blue, deletions in red, and clouds the change regions.
 - Takeoff counts are compared by tag, sheet, and area, with old quantity, new quantity, and delta on the Excel Revision Changes sheet. Fixture and panel schedule row changes are on that sheet too. An item that clearly persists keeps its old item id. Review decisions carry forward only for unchanged items. Changed items go back to check, including when the detector recorded no score. That check is a revision flag.
 - If alignment fails or agreement is below the cutoff in `adel_takeoff/constants.py`, that sheet is refused. The refusal says why. No colored overlay and no position-based count diff are produced for it.
+- Read a scanned sheet. A page with no usable text layer is rendered and read with Tesseract. Each word is kept with its box and confidence in `data/text/<job-id>.json`. A page that already has PDF text keeps that text. Title blocks, scale text, legend labels, and schedules use those words. Anything read by OCR is marked source `ocr`.
+- Low-confidence OCR does not set a scale or a schedule value on its own. That reading is withheld and sent to check. The cutoff is the same check cutoff in `adel_takeoff/constants.py`.
+- Search a tag, a panel name, or any other text across the set. Hits list the sheet and the location, and a hit opens on the sheet with the spot marked. The same hits are on the Excel Text search sheet.
 
 The legend is the stack of labeled symbols under the heading `SYMBOL LEGEND`. Rows more than 72 points apart are not treated as the same legend. Match lines need a shared key and one overlap depth, for example `MATCH LINE ML-A OVERLAP 120`.
 
@@ -56,6 +59,8 @@ The legend is the stack of labeled symbols under the heading `SYMBOL LEGEND`. Ro
 - A default markup.
 - A multi-contractor product.
 - Designing the fire alarm system, programming lighting or shade controls, or replacing the vendor's shop drawings. The count is by the printed symbol and the job's scope flag.
+- Symbol geometry from a scan. OCR reads the words. It does not invent a device mark, and a search hit does not add a takeoff item.
+- A scale or a schedule cell from low-confidence OCR. That reading stays unset and is listed to check.
 
 ## Routing seam
 
@@ -67,12 +72,17 @@ The legend is the stack of labeled symbols under the heading `SYMBOL LEGEND`. Ro
 python -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
+```
+
+Scanned sheets also need the Tesseract program (`tesseract` on PATH). Vector PDFs do not.
+
+```bash
 python -m adel_takeoff
 ```
 
 Open http://127.0.0.1:8000
 
-Jobs are stored under `./data`. Review decisions are `data/reviews/<job-id>.json`. Assembly overrides are `data/assemblies/<job-id>.json`. The starter assemblies are `assemblies/starter.json`. Manual scales and measured lengths are `data/scales/<job-id>.json`. A revision compare is `data/revisions/<job-id>.json`, and the overlay PDF is `data/revisions/<job-id>-overlay.pdf`.
+Jobs are stored under `./data`. Review decisions are `data/reviews/<job-id>.json`. Assembly overrides are `data/assemblies/<job-id>.json`. The starter assemblies are `assemblies/starter.json`. Manual scales and measured lengths are `data/scales/<job-id>.json`. A revision compare is `data/revisions/<job-id>.json`, and the overlay PDF is `data/revisions/<job-id>-overlay.pdf`. The text index is `data/text/<job-id>.json`. Search from the job's Search page. The Excel download includes the Text search sheet and any OCR checks.
 
 To compare a revision, upload the previous set first, open that job, choose Revision, and upload the revised PDF. The job then becomes the revised set. Unchanged review decisions stay. Changed marks return to check. Download Excel for the Revision Changes sheet, or open the overlay PDF from the revision page.
 

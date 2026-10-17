@@ -145,6 +145,7 @@ tr.status-unmatched { background: #fff1f1; }
 .assembly-block input[type="text"] { width: 7rem; }
 .assembly-block select { width: 10rem; }
 
+#text-spot { max-width: 100%; border: 1px solid var(--line); background: white; }
 td.how-counted, td.location { min-width: 12rem; }
 td.review-decision { min-width: 14rem; }
 .review-state { margin-top: 0.35rem; }

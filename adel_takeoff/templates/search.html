@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Search{% endblock %}
+{% block body %}
+<p class="nav"><a href="/jobs/{{ job.id }}">Job settings</a> · <a href="/jobs/{{ job.id }}/review">Review counts</a> · <a href="/jobs/{{ job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ job.id }}/scale">Scale</a> · <a href="/jobs/{{ job.id }}/revision">Revision</a> · <a href="/jobs/{{ job.id }}/export.xlsx">Download Excel</a></p>
+<h1>Search the set</h1>
+<p class="note" id="text-note">Find a tag, a panel name, or any other text. A page with no usable text layer is read by OCR. Those words keep a box and a confidence, and they are marked source ocr. A low-confidence OCR reading does not set a scale or a schedule value. It goes to check.</p>
+<form method="get" action="/jobs/{{ job.id }}/search" class="add-form">
+  <label for="q">Text
+    <input id="q" name="q" type="text" value="{{ query }}" placeholder="LP1 or FIRST FLOOR">
+  </label>
+  <button type="submit">Search</button>
+</form>
+<h2>Pages</h2>
+<table id="text-pages">
+  <thead>
+    <tr><th>Sheet</th><th>Title</th><th>Text source</th><th>Words</th></tr>
+  </thead>
+  <tbody>
+    {% for page in pages %}
+    <tr>
+      <td>{{ page.sheet }}</td>
+      <td>{{ page.sheet_title }}</td>
+      <td>{{ page.source }}</td>
+      <td>{{ page.words | length }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if checks %}
+<h2>OCR checks</h2>
+<table id="ocr-checks">
+  <thead>
+    <tr><th>Kind</th><th>Sheet</th><th>Text</th><th>Confidence</th><th>Note</th></tr>
+  </thead>
+  <tbody>
+    {% for check in checks %}
+    <tr>
+      <td>{{ check.kind }}</td>
+      <td>{{ check.sheet }}</td>
+      <td>{{ check.text }}</td>
+      <td>{{ check.confidence if check.confidence is not none else "" }}</td>
+      <td>{{ check.note }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+<h2>Hits</h2>
+{% if query %}
+<p id="search-query">{{ hits | length }} hit{{ "" if hits | length == 1 else "s" }} for {{ query }}.</p>
+{% else %}
+<p id="search-query">Enter text to search every sheet.</p>
+{% endif %}
+{% if hits %}
+<table id="text-hits">
+  <thead>
+    <tr><th>Sheet</th><th>Text</th><th>Location</th><th>Source</th><th>Confidence</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for hit in hits %}
+    <tr>
+      <td>{{ hit.sheet }}{% if hit.sheet_title %} — {{ hit.sheet_title }}{% endif %}</td>
+      <td>{{ hit.text }}</td>
+      <td>{{ hit.x0 }}, {{ hit.y0 }} pt</td>
+      <td>{{ hit.source }}</td>
+      <td>{{ hit.confidence if hit.confidence is not none else "" }}</td>
+      <td><a href="/jobs/{{ job.id }}/search?q={{ query | urlencode }}&amp;hit={{ loop.index0 }}">Show on sheet</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% if spot %}
+<h2 id="text-spot-heading">{{ spot.sheet }} — {{ spot.text }}</h2>
+<p class="note">The blue rectangle is the hit at {{ spot.x0 }}, {{ spot.y0 }} to {{ spot.x1 }}, {{ spot.y1 }} pt.</p>
+<img id="text-spot" alt="Marked text on {{ spot.sheet }}" src="/jobs/{{ job.id }}/search/spot.png?page={{ spot.page_index }}&amp;x0={{ spot.x0 }}&amp;y0={{ spot.y0 }}&amp;x1={{ spot.x1 }}&amp;y1={{ spot.y1 }}">
+{% endif %}
+{% endblock %}

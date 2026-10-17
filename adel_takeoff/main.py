@@ -139,6 +139,9 @@ def ingest_pdf(data_dir: Path, filename: str, payload: bytes) -> str:
         conn.execute("UPDATE jobs SET pdf_path = ? WHERE id = ?", (str(path), job_id))
         save_takeoff(conn, job_id, result)
     save_document(review_path(data_dir, job_id), empty_document())
+    from adel_takeoff.text_index import build_text_index, save_text_index, text_path
+
+    save_text_index(text_path(data_dir, job_id), build_text_index(payload))
     return job_id
 
 
@@ -783,6 +786,54 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
                 },
             )
         return RedirectResponse(url=f"/jobs/{job_id}/review", status_code=303)
+
+    @app.get("/jobs/{job_id}/search", response_class=HTMLResponse)
+    def search_page(request: Request, job_id: str, q: str = "", hit: int = -1):
+        from adel_takeoff.text_index import index_for_job, save_text_index, search_index
+
+        loaded = _load(job_id)
+        index, path = index_for_job(loaded["job"])
+        query = " ".join(q.split())
+        hits = search_index(index, query) if query else []
+        if path is not None and query:
+            index["query"] = query
+            index["hits"] = hits
+            save_text_index(path, index)
+        spot = hits[hit] if hits and 0 <= hit < len(hits) else None
+        return TEMPLATES.TemplateResponse(
+            request,
+            "search.html",
+            {
+                "contractor": CONTRACTOR,
+                "disclaimer": DISCLAIMER,
+                "job": loaded["job"],
+                "query": query,
+                "pages": index.get("pages") or [],
+                "hits": hits,
+                "spot": spot,
+                "hit_index": hit if spot else -1,
+                "checks": index.get("ocr_checks") or [],
+            },
+        )
+
+    @app.get("/jobs/{job_id}/search/spot.png")
+    def search_spot(
+        job_id: str,
+        page: int,
+        x0: float,
+        y0: float,
+        x1: float,
+        y1: float,
+    ):
+        from adel_takeoff.text_index import render_hit
+
+        loaded = _load(job_id)
+        pdf_path = Path(loaded["job"]["pdf_path"])
+        try:
+            payload = render_hit(pdf_path.read_bytes(), page, (x0, y0, x1, y1))
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return Response(content=payload, media_type="image/png")
 
     @app.get("/jobs/{job_id}/export.xlsx")
     def export_excel(job_id: str):

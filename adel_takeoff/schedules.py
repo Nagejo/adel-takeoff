@@ -16,7 +16,14 @@ from adel_takeoff.constants import (
     SCHEDULE_HEADER_WINDOW_PT,
     SCHEDULE_ROW_GAP_PT,
 )
-from adel_takeoff.extract import PageData, Word, group_lines
+from adel_takeoff.extract import (
+    OCR_VALUE_NOTE,
+    PageData,
+    Word,
+    group_lines,
+    is_low_ocr,
+    min_ocr_confidence,
+)
 
 
 _MARK = re.compile(r"[A-Z]{1,4}\d{0,3}")
@@ -83,6 +90,8 @@ class FixtureScheduleRow:
     count_text: str
     page_index: int
     sheet: str
+    source: str = "pdf"
+    ocr_check: bool = False
 
     def as_dict(self, *, used: bool) -> dict:
         return {
@@ -98,6 +107,8 @@ class FixtureScheduleRow:
             "page_index": self.page_index,
             "sheet": self.sheet,
             "used": used,
+            "source": self.source,
+            "ocr_check": self.ocr_check,
         }
 
 
@@ -111,6 +122,8 @@ class PanelScheduleRow:
     load: str
     page_index: int
     sheet: str
+    source: str = "pdf"
+    ocr_check: bool = False
 
     def as_dict(self, *, used: bool) -> dict:
         return {
@@ -123,6 +136,8 @@ class PanelScheduleRow:
             "page_index": self.page_index,
             "sheet": self.sheet,
             "used": used,
+            "source": self.source,
+            "ocr_check": self.ocr_check,
         }
 
 
@@ -138,6 +153,7 @@ class ParsedSchedules:
     regions: list[dict] = field(default_factory=list)
     fixture_table_count: int = 0
     panel_table_count: int = 0
+    ocr_checks: list[dict] = field(default_factory=list)
 
 
 def normalize_token(text: str) -> str:
@@ -255,14 +271,55 @@ def _spans(anchors: list[tuple[str, float]]) -> list[tuple[str, float, float]]:
     return spans
 
 
-def _cells(words: list[Word], spans: list[tuple[str, float, float]]) -> dict[str, str]:
+def _line_low(words: list[Word]) -> bool:
+    return any(is_low_ocr(word) for word in words)
+
+
+def _word_box(words: list[Word]) -> tuple[float, float, float, float]:
+    return (
+        min(word.x0 for word in words),
+        min(word.y0 for word in words),
+        max(word.x1 for word in words),
+        max(word.y1 for word in words),
+    )
+
+
+def _ocr_check(kind: str, page: PageData, words: list[Word], text: str) -> dict:
+    x0, y0, x1, y1 = _word_box(words)
+    return {
+        "kind": kind,
+        "sheet": page.sheet,
+        "page_index": page.index,
+        "text": text,
+        "confidence": min_ocr_confidence(words),
+        "note": OCR_VALUE_NOTE,
+        "x0": x0,
+        "y0": y0,
+        "x1": x1,
+        "y1": y1,
+    }
+
+
+def _row_source(page: PageData, words: list[Word]) -> str:
+    if page.text_source == "ocr" or any(word.source == "ocr" for word in words):
+        return "ocr"
+    return "pdf"
+
+
+def _cells(
+    words: list[Word], spans: list[tuple[str, float, float]]
+) -> tuple[dict[str, str], set[str]]:
     buckets: dict[str, list[str]] = {field: [] for field, _left, _right in spans}
+    withheld: set[str] = set()
     for word in sorted(words, key=lambda item: item.x0):
         for field, left, right in spans:
             if left <= word.cx < right:
-                buckets[field].append(word.text)
+                if is_low_ocr(word):
+                    withheld.add(field)
+                else:
+                    buckets[field].append(word.text)
                 break
-    return {field: " ".join(parts).strip() for field, parts in buckets.items()}
+    return {field: " ".join(parts).strip() for field, parts in buckets.items()}, withheld
 
 
 def _mark_token(text: str) -> str:
@@ -333,6 +390,7 @@ def _region(kind: str, label: str, page: PageData, name: str, lines: list[list[W
         "bbox": (x0, y0, x1, y1),
         "sheet": page.sheet,
         "name": name,
+        "source": page.text_source,
     }
 
 
@@ -344,10 +402,22 @@ def parse_schedules(pages: list[PageData]) -> ParsedSchedules:
         while index < len(lines):
             line = lines[index]
             if _fixture_heading(line):
+                if _line_low(line):
+                    parsed.ocr_checks.append(
+                        _ocr_check("schedule", page, line, _line_text(line))
+                    )
+                    index += 1
+                    continue
                 index = _read_fixture_table(parsed, page, lines, index)
                 continue
             panel_name = _panel_heading(line)
             if panel_name is not None:
+                if _line_low(line):
+                    parsed.ocr_checks.append(
+                        _ocr_check("schedule", page, line, _line_text(line))
+                    )
+                    index += 1
+                    continue
                 if panel_name:
                     index = _read_panel_table(parsed, page, lines, index, panel_name)
                     continue
@@ -362,12 +432,21 @@ def _read_fixture_table(parsed: ParsedSchedules, page: PageData, lines, start: i
     header_index = _header_index(lines, start, _fixture_header)
     if header_index is None:
         return start + 1
+    if _line_low(lines[header_index]):
+        parsed.ocr_checks.append(
+            _ocr_check("schedule", page, lines[header_index], _line_text(lines[header_index]))
+        )
+        return header_index + 1
     anchors = _match_headers(lines[header_index], _FIXTURE_ALIASES)
     spans = _spans(anchors)
     data, next_index = _data_lines(lines, header_index)
     block = [lines[start], lines[header_index], *data]
     for row in data:
-        cells = _cells(row, spans)
+        cells, withheld = _cells(row, spans)
+        if withheld:
+            parsed.ocr_checks.append(_ocr_check("schedule", page, row, _line_text(row)))
+        if "mark" in withheld:
+            continue
         mark = _mark_token(cells.get("mark", ""))
         if not mark:
             continue
@@ -385,6 +464,8 @@ def _read_fixture_table(parsed: ParsedSchedules, page: PageData, lines, start: i
                 count_text=count_text,
                 page_index=page.index,
                 sheet=page.sheet,
+                source=_row_source(page, row),
+                ocr_check=bool(withheld),
             )
         )
     parsed.fixture_table_count += 1
@@ -402,6 +483,11 @@ def _read_panel_table(
     header_index = _header_index(lines, start, _panel_header)
     if header_index is None:
         return start + 1
+    if _line_low(lines[header_index]):
+        parsed.ocr_checks.append(
+            _ocr_check("schedule", page, lines[header_index], _line_text(lines[header_index]))
+        )
+        return header_index + 1
     anchors = _match_headers(lines[header_index], _PANEL_ALIASES)
     spans = _spans(anchors)
     data, next_index = _data_lines(lines, header_index)
@@ -409,7 +495,11 @@ def _read_panel_table(
     if panel_name not in parsed.panel_names:
         parsed.panel_names.append(panel_name)
     for row in data:
-        cells = _cells(row, spans)
+        cells, withheld = _cells(row, spans)
+        if withheld:
+            parsed.ocr_checks.append(_ocr_check("schedule", page, row, _line_text(row)))
+        if "circuit" in withheld:
+            continue
         circuit = normalize_circuit(cells.get("circuit", ""))
         if not circuit:
             continue
@@ -423,6 +513,8 @@ def _read_panel_table(
                 load=cells.get("load", ""),
                 page_index=page.index,
                 sheet=page.sheet,
+                source=_row_source(page, row),
+                ocr_check=bool(withheld),
             )
         )
     parsed.panel_table_count += 1

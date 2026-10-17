@@ -7,15 +7,18 @@ Size, orientation, and stroke order stay part of the identity.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 import fitz
 
 from adel_takeoff.constants import (
+    CONFIDENCE_CHECK_MIN,
     LEGEND_ROW_GAP_PT,
     MAX_SYMBOL_PT,
     MIN_MATCH_LINE_PT,
     MIN_SYMBOL_PT,
+    OCR_LINE_TOLERANCE_PT,
 )
 
 
@@ -26,6 +29,8 @@ class Word:
     x1: float
     y1: float
     text: str
+    source: str = "pdf"
+    confidence: float | None = None
 
     @property
     def cx(self) -> float:
@@ -68,6 +73,7 @@ class LegendEntry:
     bbox: tuple[float, float, float, float]
     ambiguous: bool = False
     system: str = ""
+    source: str = "pdf"
 
 
 @dataclass(frozen=True)
@@ -92,6 +98,41 @@ class PageData:
     sheet: str = ""
     sheet_title: str = ""
     text: str = ""
+    text_source: str = "pdf"
+    ocr_checks: list = field(default_factory=list)
+
+
+_ALNUM = re.compile(r"[A-Za-z0-9]")
+OCR_VALUE_NOTE = (
+    "OCR confidence is below the cutoff. This value was not applied. Check it."
+)
+
+
+def usable_text_layer(words: list[Word]) -> bool:
+    """A page has usable text when a word contains a letter or a digit."""
+
+    return any(_ALNUM.search(word.text or "") for word in words)
+
+
+def is_low_ocr(word: Word) -> bool:
+    """Low-confidence OCR cannot set a scale or a schedule value on its own."""
+
+    if word.source != "ocr":
+        return False
+    if word.confidence is None:
+        return True
+    return word.confidence < CONFIDENCE_CHECK_MIN
+
+
+def min_ocr_confidence(words: list[Word]) -> float | None:
+    scores = [
+        word.confidence if word.confidence is not None else 0.0
+        for word in words
+        if word.source == "ocr"
+    ]
+    if not scores:
+        return None
+    return min(scores)
 
 
 def _quantize(value: float) -> float:
@@ -261,18 +302,45 @@ def _long_lines(primitives: list[Primitive]) -> list[tuple[float, float, float, 
     return lines
 
 
-def page_words(page) -> list[Word]:
+def pdf_text_words(page) -> list[Word]:
     words = []
     for raw in page.get_text("words"):
-        words.append(Word(float(raw[0]), float(raw[1]), float(raw[2]), float(raw[3]), str(raw[4])))
+        text = str(raw[4])
+        if not text.strip():
+            continue
+        words.append(
+            Word(float(raw[0]), float(raw[1]), float(raw[2]), float(raw[3]), text, source="pdf")
+        )
     return words
 
 
-def group_lines(words: list[Word]) -> list[list[Word]]:
+def words_and_source(page) -> tuple[list[Word], str]:
+    """PDF text when the page has it. OCR when the page is raster only."""
+
+    native = pdf_text_words(page)
+    if usable_text_layer(native):
+        return native, "pdf"
+    from adel_takeoff.text_index import ocr_page_words
+
+    return ocr_page_words(page), "ocr"
+
+
+def page_words(page) -> list[Word]:
+    words, _source = words_and_source(page)
+    return words
+
+
+def group_lines(words: list[Word], tolerance: float | None = None) -> list[list[Word]]:
+    if tolerance is None:
+        tolerance = (
+            OCR_LINE_TOLERANCE_PT
+            if any(word.source == "ocr" for word in words)
+            else 3.0
+        )
     ordered = sorted(words, key=lambda word: (round(word.y0, 0), word.x0))
     lines: list[list[Word]] = []
     for word in ordered:
-        if lines and abs(word.y0 - lines[-1][0].y0) <= 3:
+        if lines and abs(word.y0 - lines[-1][0].y0) <= tolerance:
             lines[-1].append(word)
         else:
             lines.append([word])
@@ -355,7 +423,7 @@ def _find_heading(words: list[Word]) -> Word | None:
     return headings[0][0]
 
 
-def _label_for(cluster: Cluster, words: list[Word]) -> str:
+def _label_words(cluster: Cluster, words: list[Word]) -> list[Word]:
     x1 = cluster.bbox[2]
     cy = cluster.center[1]
     chosen = [
@@ -366,29 +434,36 @@ def _label_for(cluster: Cluster, words: list[Word]) -> str:
         and abs(word.cy - cy) <= 12
     ]
     chosen.sort(key=lambda word: word.x0)
-    return " ".join(word.text for word in chosen).strip()
+    return chosen
 
 
-def _rows_under_heading(page: PageData, heading: Word, next_y: float) -> list[tuple[Cluster, str]]:
+def _label_for(cluster: Cluster, words: list[Word]) -> str:
+    return " ".join(word.text for word in _label_words(cluster, words)).strip()
+
+
+def _rows_under_heading(
+    page: PageData, heading: Word, next_y: float
+) -> list[tuple[Cluster, str, list[Word]]]:
     candidates = []
     for cluster in page.clusters:
         if cluster.center[1] < heading.y0 - 4 or cluster.center[1] >= next_y:
             continue
         if not (heading.x0 - 40 <= cluster.center[0] <= heading.x0 + 140):
             continue
-        label = _label_for(cluster, page.words)
+        label_words = _label_words(cluster, page.words)
+        label = " ".join(word.text for word in label_words).strip()
         if not label:
             continue
-        candidates.append((cluster, label))
+        candidates.append((cluster, label, label_words))
     candidates.sort(key=lambda item: item[0].center[1])
     if not candidates:
         return []
     rows = [candidates[0]]
-    for cluster, label in candidates[1:]:
+    for cluster, label, label_words in candidates[1:]:
         gap = cluster.center[1] - rows[-1][0].center[1]
         if gap > LEGEND_ROW_GAP_PT:
             break
-        rows.append((cluster, label))
+        rows.append((cluster, label, label_words))
     return rows
 
 
@@ -406,7 +481,24 @@ def legend_entries(page: PageData) -> list[LegendEntry]:
     order: list[tuple] = []
     for index, (heading, system) in enumerate(headings):
         next_y = headings[index + 1][0].y0 if index + 1 < len(headings) else float("inf")
-        for cluster, label in _rows_under_heading(page, heading, next_y):
+        for cluster, label, label_words in _rows_under_heading(page, heading, next_y):
+            if any(is_low_ocr(word) for word in label_words):
+                page.ocr_checks.append(
+                    {
+                        "kind": "legend",
+                        "sheet": page.sheet,
+                        "page_index": page.index,
+                        "text": label,
+                        "confidence": min_ocr_confidence(label_words),
+                        "note": OCR_VALUE_NOTE,
+                        "x0": min(word.x0 for word in label_words),
+                        "y0": min(word.y0 for word in label_words),
+                        "x1": max(word.x1 for word in label_words),
+                        "y1": max(word.y1 for word in label_words),
+                    }
+                )
+                continue
+            label_source = "ocr" if any(word.source == "ocr" for word in label_words) else "pdf"
             fingerprint = cluster.fingerprint
             if fingerprint in found:
                 previous = found[fingerprint]
@@ -417,6 +509,7 @@ def legend_entries(page: PageData) -> list[LegendEntry]:
                     bbox=previous.bbox,
                     ambiguous=True,
                     system=previous.system,
+                    source=previous.source,
                 )
                 continue
             found[fingerprint] = LegendEntry(
@@ -426,6 +519,7 @@ def legend_entries(page: PageData) -> list[LegendEntry]:
                 bbox=cluster.bbox,
                 ambiguous=False,
                 system=system,
+                source=label_source,
             )
             order.append(fingerprint)
     return [found[fingerprint] for fingerprint in order]
@@ -507,8 +601,14 @@ def read_pdf(pdf_bytes: bytes) -> list[PageData]:
     try:
         pages: list[PageData] = []
         for index, page in enumerate(document):
-            words = page_words(page)
+            words, text_source = words_and_source(page)
             primitives = _drawings_to_primitives(page)
+            if text_source == "pdf":
+                text = page.get_text("text")
+            else:
+                text = "\n".join(
+                    " ".join(word.text for word in line) for line in group_lines(words)
+                )
             page_data = PageData(
                 index=index,
                 width=float(page.rect.width),
@@ -518,7 +618,8 @@ def read_pdf(pdf_bytes: bytes) -> list[PageData]:
                 match_lines=_match_lines_on_page(index, words, _long_lines(primitives)),
                 sheet=sheet_name(words, index),
                 sheet_title=read_sheet_title(words),
-                text=page.get_text("text"),
+                text=text,
+                text_source=text_source,
             )
             pages.append(page_data)
         return pages

@@ -237,6 +237,8 @@ def build_workbook(job: dict, items, allowances, rfis, claims) -> bytes:
     _write_labor(workbook, job, review["labor"], review.get("assembly_warning") or "")
     _write_measured(workbook, review.get("scales") or [], review.get("measurements") or [])
     _write_revision(workbook, review.get("revision") or {})
+    _write_text_search(workbook, review.get("text_query") or "", review.get("text_hits") or [])
+    _write_ocr_checks(workbook, review.get("ocr_checks") or [])
 
     buffer = BytesIO()
     workbook.save(buffer)
@@ -637,6 +639,76 @@ def _write_revision(workbook: Workbook, revision: dict) -> None:
         ]
         for column, value in enumerate(values, start=1):
             sheet.cell(index, column, value if value != "" else None)
+
+
+def _write_text_search(workbook: Workbook, query: str, hits: list[dict]) -> None:
+    sheet = workbook.create_sheet("Text search")
+    sheet["A1"] = (
+        "Hits from a search across the drawing set. "
+        "Each hit keeps the sheet and the location of the text. "
+        "A page with no text layer is read by OCR and marked source ocr."
+    )
+    sheet["A2"] = f"Query: {query}" if query else "Query: none. No search has been run."
+    headers = [
+        "Sheet",
+        "Sheet title",
+        "PDF page",
+        "Text",
+        "Location",
+        "Source",
+        "Confidence",
+    ]
+    for column, header in enumerate(headers, start=1):
+        cell = sheet.cell(4, column, header)
+        cell.font = Font(bold=True)
+    if not hits:
+        sheet["A5"] = "No search hits."
+        return
+    for index, hit in enumerate(hits, start=5):
+        location = ""
+        if hit.get("x0") is not None:
+            location = f"{hit['x0']}, {hit['y0']} to {hit['x1']}, {hit['y1']} pt"
+        values = [
+            hit.get("sheet") or None,
+            hit.get("sheet_title") or None,
+            (hit.get("page_index") + 1) if hit.get("page_index") is not None else None,
+            hit.get("text") or None,
+            location or None,
+            hit.get("source") or None,
+            hit.get("confidence"),
+        ]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(index, column, value)
+
+
+def _write_ocr_checks(workbook: Workbook, checks: list[dict]) -> None:
+    sheet = workbook.create_sheet("OCR checks")
+    sheet["A1"] = (
+        "Low-confidence OCR does not set a scale or a schedule value on its own. "
+        "Each row is a reading that was withheld and sent to check."
+    )
+    headers = ["Kind", "Sheet", "PDF page", "Text", "Confidence", "Location", "Note"]
+    for column, header in enumerate(headers, start=1):
+        cell = sheet.cell(3, column, header)
+        cell.font = Font(bold=True)
+    if not checks:
+        sheet["A4"] = "No low-confidence OCR reading was withheld."
+        return
+    for index, check in enumerate(checks, start=4):
+        location = ""
+        if check.get("x0") is not None and check.get("y0") is not None:
+            location = f"{check['x0']}, {check['y0']} to {check['x1']}, {check['y1']} pt"
+        values = [
+            check.get("kind") or None,
+            check.get("sheet") or None,
+            (check.get("page_index") + 1) if check.get("page_index") is not None else None,
+            check.get("text") or None,
+            check.get("confidence"),
+            location or None,
+            check.get("note") or None,
+        ]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(index, column, value)
 
 
 def _write_labor(workbook: Workbook, job: dict, rows: list[dict], warning: str) -> None:

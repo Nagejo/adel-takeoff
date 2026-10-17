@@ -93,6 +93,13 @@ SCHEDULE_HEADER_PHRASE_GAP_PT = 24.0
 # create a band when the detector recorded no score. low stays low.
 DISCREPANCY_CONFIDENCE_CAP = "check"
 
+# Scanned pages are rendered at this resolution for Tesseract. OCR words on
+# one printed line can sit a few points apart, so line grouping is looser
+# than the vector-text grouping.
+OCR_DPI = 200
+OCR_PSM = 6
+OCR_LINE_TOLERANCE_PT = 8.0
+
 # Revision alignment searches a translation of this many points. A sheet
 # that needs a larger shift, or that agrees below the minimum, is refused.
 ALIGNMENT_WINDOW_PT = 36

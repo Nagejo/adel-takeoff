@@ -337,6 +337,17 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
     for row in rows:
         if row["id"] in affected:
             row["confidence"] = apply_discrepancy_cap(row["confidence"])
+    ocr_marks = {
+        row["mark"]
+        for row in linked["fixture_rows"]
+        if row.get("ocr_check") and row.get("mark")
+    }
+    for row in rows:
+        if row.get("type_mark") in ocr_marks:
+            row["confidence"] = "check"
+    from adel_takeoff.text_index import index_for_job
+
+    text_index, _path = index_for_job(job)
     catalog = catalog_for_job(job)
     apply_assemblies(rows, job, catalog)
     allowance_rows = [present_allowance(row, job) for row in allowances]
@@ -377,4 +388,7 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
         "systems": system_rollup(rows),
         "fire_alarm_floors": fire_alarm_by_floor(rows),
         "scope_split": scope_split(rows),
+        "text_query": text_index.get("query") or "",
+        "text_hits": text_index.get("hits") or [],
+        "ocr_checks": text_index.get("ocr_checks") or [],
     }
