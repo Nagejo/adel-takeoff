@@ -117,6 +117,96 @@
         {"role": "conductor", "description": "Conductor allowance", "quantity": "20", "unit": "LF", "size": "12", "count": "2", "allowance": true},
         {"role": "misc", "description": "Wire connectors", "quantity": "2", "unit": "EA"}
       ]
+    },
+    {
+      "id": "wap",
+      "name": "Wireless access point",
+      "version": "example-1",
+      "example": true,
+      "matches": ["wap", "wireless access", "access point"],
+      "labor_hours": "0.75",
+      "labor_rate_key": "journeyman",
+      "parts": [
+        {"role": "device", "description": "Wireless access point", "quantity": "1", "unit": "EA"},
+        {"role": "box", "description": "Box", "quantity": "1", "unit": "EA"},
+        {"role": "ring", "description": "Ring", "quantity": "1", "unit": "EA"},
+        {"role": "raceway", "description": "Raceway allowance", "quantity": "15", "unit": "LF", "size": "3/4", "allowance": true}
+      ]
+    },
+    {
+      "id": "camera",
+      "name": "Camera",
+      "version": "example-1",
+      "example": true,
+      "matches": ["camera", "cctv"],
+      "labor_hours": "1.00",
+      "labor_rate_key": "journeyman",
+      "parts": [
+        {"role": "device", "description": "Camera", "quantity": "1", "unit": "EA"},
+        {"role": "box", "description": "Box", "quantity": "1", "unit": "EA"},
+        {"role": "ring", "description": "Ring", "quantity": "1", "unit": "EA"},
+        {"role": "raceway", "description": "Raceway allowance", "quantity": "20", "unit": "LF", "size": "3/4", "allowance": true}
+      ]
+    },
+    {
+      "id": "smoke-detector",
+      "name": "Smoke detector",
+      "version": "example-1",
+      "example": true,
+      "matches": ["smoke"],
+      "labor_hours": "0.60",
+      "labor_rate_key": "journeyman",
+      "parts": [
+        {"role": "device", "description": "Smoke detector", "quantity": "1", "unit": "EA"},
+        {"role": "box", "description": "Box", "quantity": "1", "unit": "EA"},
+        {"role": "ring", "description": "Ring", "quantity": "1", "unit": "EA"},
+        {"role": "raceway", "description": "Raceway allowance", "quantity": "15", "unit": "LF", "size": "1/2", "allowance": true}
+      ]
+    },
+    {
+      "id": "horn-strobe",
+      "name": "Horn/strobe",
+      "version": "example-1",
+      "example": true,
+      "matches": ["horn", "strobe"],
+      "labor_hours": "0.60",
+      "labor_rate_key": "journeyman",
+      "parts": [
+        {"role": "device", "description": "Horn/strobe", "quantity": "1", "unit": "EA"},
+        {"role": "box", "description": "Box", "quantity": "1", "unit": "EA"},
+        {"role": "ring", "description": "Ring", "quantity": "1", "unit": "EA"},
+        {"role": "raceway", "description": "Raceway allowance", "quantity": "15", "unit": "LF", "size": "1/2", "allowance": true}
+      ]
+    },
+    {
+      "id": "keypad",
+      "name": "Lighting keypad",
+      "version": "example-1",
+      "example": true,
+      "matches": ["keypad"],
+      "labor_hours": "0.75",
+      "labor_rate_key": "journeyman",
+      "parts": [
+        {"role": "device", "description": "Lighting keypad", "quantity": "1", "unit": "EA"},
+        {"role": "box", "description": "Box", "quantity": "1", "unit": "EA"},
+        {"role": "ring", "description": "Ring", "quantity": "1", "unit": "EA"},
+        {"role": "raceway", "description": "Raceway allowance", "quantity": "15", "unit": "LF", "size": "1/2", "allowance": true}
+      ]
+    },
+    {
+      "id": "occupancy-sensor",
+      "name": "Occupancy sensor",
+      "version": "example-1",
+      "example": true,
+      "matches": ["occupancy", "vacancy"],
+      "labor_hours": "0.50",
+      "labor_rate_key": "journeyman",
+      "parts": [
+        {"role": "device", "description": "Occupancy sensor", "quantity": "1", "unit": "EA"},
+        {"role": "box", "description": "Box", "quantity": "1", "unit": "EA"},
+        {"role": "ring", "description": "Ring", "quantity": "1", "unit": "EA"},
+        {"role": "raceway", "description": "Raceway allowance", "quantity": "15", "unit": "LF", "size": "1/2", "allowance": true}
+      ]
     }
   ]
 }

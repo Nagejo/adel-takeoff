@@ -11,11 +11,32 @@
   <div><dt>Power devices</dt><dd id="power-device-count">{{ review.totals.power_devices }}</dd></div>
   <div><dt>Lighting fixtures</dt><dd id="lighting-fixture-count">{{ review.totals.lighting_fixtures }}</dd></div>
   <div><dt>Lighting controls in scope</dt><dd id="lighting-control-count">{{ review.totals.lighting_controls }}</dd></div>
+  <div><dt>Fire alarm devices</dt><dd id="fire-alarm-count">{{ review.fire_alarm_floors | sum(attribute='quantity') }}</dd></div>
   <div><dt>Direct cost</dt><dd id="direct-cost">{{ review.totals.direct_cost }}</dd></div>
   <div><dt>Marked-up total</dt><dd id="marked-up-total">{% if review.totals.marked_up_total is none %}not applied{% else %}{{ review.totals.marked_up_total }}{% endif %}</dd></div>
 </dl>
 <p class="note">Material unit cost and labor hours stay blank until you enter them. Direct cost uses only those entries. Blank fields contribute nothing.</p>
 <p class="note" id="scale-note">Lengths are measured on the scale page only where a sheet has one valid scale. Otherwise raceway and conductor stay on the assembly allowance.</p>
+<p class="note" id="scope-note">Low voltage, fire alarm, and controls keep the same item id, sheet, location, count method, confidence, and review actions. Scope is by EC, by others, or rough-in only. Rough-in expands to the box, ring, and sleeve, conduit, or pull string allowance.</p>
+{% if review.fire_alarm_floors %}
+<h2>Fire alarm by floor</h2>
+<table id="fire-alarm-floors">
+  <thead>
+    <tr><th>Device type</th><th>Floor</th><th>Quantity</th><th>Sheet</th><th>Item IDs</th></tr>
+  </thead>
+  <tbody>
+    {% for row in review.fire_alarm_floors %}
+    <tr>
+      <td>{{ row.device_label }}</td>
+      <td>{{ row.floor }}</td>
+      <td>{{ row.quantity }}</td>
+      <td>{{ row.sheets | join(", ") }}</td>
+      <td>{{ row.item_ids | join(", ") }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
 <p class="note" id="confidence-note">Confidence is high, check, or low only when the detector recorded a score. The cutoffs live in config. A blank confidence means there is no score. A manual add has no score. A schedule discrepancy lowers a recorded flag to {{ review.discrepancy_cap }} and does not create a flag when there is no score. A revision compare sets a changed item to check. That check is a revision flag, and it is applied even when the detector recorded no score. Counts are the marks that were detected or that you added, after review.</p>
 {% if review.assembly_warning %}
 <p class="{% if 'unconfirmed assembly' in review.assembly_warning|lower %}warning{% else %}note{% endif %}" id="assembly-warning">{{ review.assembly_warning }}</p>

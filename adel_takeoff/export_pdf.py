@@ -119,4 +119,6 @@ def _mark(row: dict) -> tuple[tuple[float, float, float], str, bool]:
         return DEDUPED_COLOR, f"counted once; sheets {sheets}; measured", False
     if row["review_status"] == "corrected":
         return CORRECTED_COLOR, "type corrected", False
+    if row.get("scope_mode") == "rough_in":
+        return MEASURED_COLOR, "rough-in only", False
     return MEASURED_COLOR, "measured", False

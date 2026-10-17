@@ -20,7 +20,9 @@ from adel_takeoff.constants import (
 )
 
 
-ROLES = ("device", "plate", "box", "raceway", "conductor", "misc")
+ROLES = ("device", "plate", "box", "ring", "raceway", "conductor", "misc")
+ROUGH_IN_ROLES = ("box", "ring", "raceway")
+ROUGH_IN_RACEWAY = "Sleeve, conduit, or pull string allowance"
 RATE_KEYS = {key for key, _label, _amount in LABOR_RATES}
 
 
@@ -250,6 +252,61 @@ def catalog_for_job(job: dict) -> list[Assembly]:
     return apply_overrides(assemblies, load_overrides(override_path(data_dir, job_id)))
 
 
+def rough_in_parts(assembly: Assembly | None) -> tuple[AssemblyPart, ...]:
+    """Box, ring, and a sleeve or conduit allowance. The device stays off."""
+
+    kept: list[AssemblyPart] = []
+    if assembly is not None:
+        for part in assembly.parts:
+            if part.role not in ROUGH_IN_ROLES:
+                continue
+            if part.role == "raceway":
+                kept.append(replace(part, description=ROUGH_IN_RACEWAY, allowance=True))
+            else:
+                kept.append(part)
+    roles = {part.role for part in kept}
+    if "box" not in roles:
+        kept.append(AssemblyPart("box", "Box", Decimal("1"), "EA"))
+    if "ring" not in roles:
+        kept.append(AssemblyPart("ring", "Ring", Decimal("1"), "EA"))
+    if "raceway" not in roles:
+        kept.append(
+            AssemblyPart(
+                "raceway",
+                ROUGH_IN_RACEWAY,
+                Decimal("10"),
+                "LF",
+                size="3/4",
+                allowance=True,
+            )
+        )
+    return tuple(kept)
+
+
+def as_rough_in(assembly: Assembly | None) -> Assembly:
+    """The same assembly, limited to the rough-in parts."""
+
+    parts = rough_in_parts(assembly)
+    if assembly is None:
+        return Assembly(
+            id="rough-in",
+            name="Rough-in",
+            version="example-1",
+            matches=(),
+            example=True,
+            confirmed=False,
+            labor_hours=Decimal("0.50"),
+            labor_rate_key="journeyman",
+            parts=parts,
+        )
+    return replace(
+        assembly,
+        id=f"{assembly.id}-rough-in",
+        name=f"{assembly.name} rough-in",
+        parts=parts,
+    )
+
+
 def match_assembly(label: str, assemblies: list[Assembly]) -> Assembly | None:
     """First matching assembly wins. The starter file lists specific names first."""
 
@@ -289,9 +346,23 @@ def apply_assemblies(rows: list[dict], job: dict, catalog: list[Assembly]) -> No
         if row.get("effective") is None:
             continue
         assembly = match_assembly(row.get("label") or "", catalog)
-        if assembly is None:
+        if row.get("scope_mode") == "rough_in":
+            assembly = as_rough_in(assembly)
+        elif assembly is None:
             continue
         hours = assembly.labor_hours * Decimal(row["effective"])
+        row["assembly_parts"] = [
+            {
+                "role": part.role,
+                "description": part.description,
+                "quantity": part.quantity,
+                "unit": part.unit,
+                "size": part.size,
+                "count": part.count,
+                "allowance": part.allowance,
+            }
+            for part in assembly.parts
+        ]
         row["assembly_id"] = assembly.id
         row["assembly_name"] = assembly.name
         row["assembly_version"] = assembly.version
@@ -323,36 +394,61 @@ def material_rows(lines: list[dict], catalog: list[Assembly]) -> list[dict]:
     order: list[tuple] = []
     for line in lines:
         assembly = by_id.get(line.get("assembly_id") or "")
-        if assembly is None or line.get("effective") is None:
+        part_source = line.get("assembly_parts") or None
+        if line.get("effective") is None:
+            continue
+        if assembly is None and not part_source:
             continue
         count = Decimal(line["effective"])
-        for part in assembly.parts:
+        assembly_id = line.get("assembly_id") or (assembly.id if assembly else "")
+        assembly_name = line.get("assembly_name") or (assembly.name if assembly else "")
+        assembly_version = line.get("assembly_version") or (assembly.version if assembly else "")
+        part_rows = part_source or [
+            {
+                "role": part.role,
+                "description": part.description,
+                "quantity": part.quantity,
+                "unit": part.unit,
+                "size": part.size,
+                "count": part.count,
+                "allowance": part.allowance,
+            }
+            for part in assembly.parts
+        ]
+        for part in part_rows:
+            allowance = bool(part["allowance"]) if isinstance(part, dict) else part.allowance
+            role = part["role"] if isinstance(part, dict) else part.role
+            description = part["description"] if isinstance(part, dict) else part.description
+            unit = part["unit"] if isinstance(part, dict) else part.unit
+            size = part["size"] if isinstance(part, dict) else part.size
+            count_text = part["count"] if isinstance(part, dict) else part.count
+            quantity = part["quantity"] if isinstance(part, dict) else part.quantity
             key = (
-                assembly.id,
-                part.role,
-                part.description,
-                part.unit,
-                part.size,
-                part.count,
-                part.allowance,
+                assembly_id,
+                role,
+                description,
+                unit,
+                size,
+                count_text,
+                allowance,
                 bool(line.get("assembly_confirmed")),
             )
             if key not in buckets:
                 order.append(key)
                 buckets[key] = {
-                    "assembly": assembly.name,
-                    "assembly_version": line.get("assembly_version") or assembly.version,
-                    "role": part.role,
-                    "description": part.description,
-                    "unit": part.unit,
-                    "size": part.size,
-                    "conductor_count": part.count,
-                    "allowance": "allowance" if part.allowance else "",
+                    "assembly": assembly_name,
+                    "assembly_version": assembly_version,
+                    "role": role,
+                    "description": description,
+                    "unit": unit,
+                    "size": size,
+                    "conductor_count": count_text,
+                    "allowance": "allowance" if allowance else "",
                     "quantity": Decimal("0"),
                     "item_ids": [],
                     "confirmed": bool(line.get("assembly_confirmed")),
                 }
-            buckets[key]["quantity"] += count * part.quantity
+            buckets[key]["quantity"] += count * quantity
             for item_id in line.get("item_ids") or []:
                 if item_id not in buckets[key]["item_ids"]:
                     buckets[key]["item_ids"].append(item_id)

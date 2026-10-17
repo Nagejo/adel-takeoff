@@ -33,6 +33,9 @@ This is an internal tool. It is not a product for other contractors. It is not D
 - Refuse a length when the scale is missing, marked NTS, ambiguous, or the printed text and the bar disagree by more than 5 percent. The refusal says why. Raceway and conductor stay on the assembly allowance. A scale is never guessed.
 - An estimator can set a scale by picking one or by entering a known dimension between two points. That manual scale is stored in `data/scales/<job-id>.json` with who set it and when, and it overrides detection.
 - A polyline measure tool reports length in feet only on a sheet or viewport with a valid scale. Measured lengths are on the Excel Measured sheet with the sheet, the scale source, and method `measured`. They are separate from allowance lines.
+- Count low voltage and data, fire alarm, and controls in addition to power and lighting. Low voltage covers data and voice outlets, wireless access points, TV, coax, AV and speaker locations, cameras, intercom and door stations, and access control. Fire alarm covers smoke, heat, CO and combination detectors, horn/strobes, pull stations, duct detectors, modules, the FACP, and annunciators. Controls cover lighting keypads, dimmers that belong to a control system, shade controls, thermostats, and occupancy or vacancy sensors. Each system has its own legend heading and label rules. Item ids, sheet, location, count method, confidence, and review actions stay the same.
+- Set a scope for each system: by EC, by others, or rough-in only. By others names the AV/low-voltage integrator, the fire alarm vendor, or the lighting control vendor. Rough-in only expands to the box, ring, and a sleeve, conduit, or pull string allowance. The device stays by others. Landscape lighting and lighting control default to by others unless the job sets otherwise. Low voltage, fire alarm, and controls do too.
+- Fire alarm quantities are by device type and floor. The floor is taken from the sheet title when the drawing prints one. Excel adds a By system rollup and a Scope Split sheet for EC versus by others.
 - Compare a revised drawing set with the previous one from the job's Revision page. Sheets match on sheet number. A unique printed title pairs a sheet whose number changed. Added, removed, and renumbered sheets are reported. Each matched sheet is aligned and diffed. The overlay PDF marks additions in blue, deletions in red, and clouds the change regions.
 - Takeoff counts are compared by tag, sheet, and area, with old quantity, new quantity, and delta on the Excel Revision Changes sheet. Fixture and panel schedule row changes are on that sheet too. An item that clearly persists keeps its old item id. Review decisions carry forward only for unchanged items. Changed items go back to check, including when the detector recorded no score. That check is a revision flag.
 - If alignment fails or agreement is below the cutoff in `adel_takeoff/constants.py`, that sheet is refused. The refusal says why. No colored overlay and no position-based count diff are produced for it.
@@ -52,6 +55,7 @@ The legend is the stack of labeled symbols under the heading `SYMBOL LEGEND`. Ro
 - A confidence flag with no detector score. Blank means no score. It is not filled in.
 - A default markup.
 - A multi-contractor product.
+- Designing the fire alarm system, programming lighting or shade controls, or replacing the vendor's shop drawings. The count is by the printed symbol and the job's scope flag.
 
 ## Routing seam
 

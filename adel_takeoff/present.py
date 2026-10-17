@@ -15,7 +15,14 @@ from adel_takeoff.assemblies import (
 )
 from adel_takeoff.revision import empty_revision, load_revision, revision_path
 from adel_takeoff.scale import report_for_job
-from adel_takeoff.classify import categorize, in_scope, scope_label
+from adel_takeoff.classify import (
+    classify_label,
+    counts_for_ec,
+    categorize,
+    scope_label,
+    scope_mode,
+)
+from adel_takeoff.systems import fire_alarm_by_floor, scope_split, system_rollup
 from adel_takeoff.confidence import apply_discrepancy_cap, confidence_band
 from adel_takeoff.constants import DISCREPANCY_CONFIDENCE_CAP
 from adel_takeoff.costing import apply_markup, journeyman_warning, line_direct_cost
@@ -116,11 +123,21 @@ def present_item(item: dict, job: dict) -> dict:
         and review_status == "corrected"
         and bool(corrected_label)
     )
-    counted_scope = in_scope(
-        category,
-        include_landscape=bool(job["include_landscape"]),
-        include_lighting_control=bool(job["include_lighting_control"]),
-    )
+    classified = classify_label(label)
+    if review_status != "corrected":
+        category = item.get("category") or classified.category
+        if classified.category == category:
+            device_type = classified.device_type
+            system_name = classified.system
+        else:
+            stored = classify_label(item.get("label") or label)
+            device_type = stored.device_type if stored.category == category else classified.device_type
+            system_name = stored.system if stored.category == category else classified.system
+    else:
+        device_type = classified.device_type
+        system_name = classified.system
+    mode = scope_mode(category, job)
+    counted_scope = counts_for_ec(category, job)
     measured = _quantity(item["measured_quantity"])
     override = _quantity(item["override_quantity"])
     if promoted and measured is None:
@@ -138,7 +155,7 @@ def present_item(item: dict, job: dict) -> dict:
         effective = None
         scope_counted = False
     elif not counted_scope:
-        status = "by_others" if scope_label(category, False) == "by others" else "not_counted"
+        status = "by_others" if mode == "by_others" else "not_counted"
         effective = None
         scope_counted = False
     else:
@@ -150,7 +167,7 @@ def present_item(item: dict, job: dict) -> dict:
     elif status == "excluded":
         scope = EXCLUSION_LABELS.get(exclusion, exclusion or "excluded")
     else:
-        scope = scope_label(category, scope_counted and status == "counted")
+        scope = scope_label(category, scope_counted and status == "counted", mode)
     rate_key = item.get("labor_rate_key") or "journeyman"
     rate = _decimal(job.get(f"rate_{rate_key}"))
     direct = line_direct_cost(
@@ -182,7 +199,11 @@ def present_item(item: dict, job: dict) -> dict:
         "assembly_hours_per_unit": None,
         "assembly_labor_hours": None,
         "assembly_rate_key": "",
+        "assembly_parts": [],
         "category": category,
+        "device_type": device_type,
+        "system": system_name,
+        "scope_mode": mode,
         "measurement": measurement,
         "measured": measured,
         "override": override,
@@ -353,4 +374,7 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
         "discrepancies": linked["discrepancies"],
         "by_type": linked["by_type"],
         "discrepancy_cap": DISCREPANCY_CONFIDENCE_CAP,
+        "systems": system_rollup(rows),
+        "fire_alarm_floors": fire_alarm_by_floor(rows),
+        "scope_split": scope_split(rows),
     }
