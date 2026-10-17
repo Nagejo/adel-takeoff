@@ -1032,6 +1032,153 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
             save_takeoff(conn, job_id, overrides_result)
         return RedirectResponse(url=f"/jobs/{job_id}/sheets", status_code=303)
 
+    @app.get("/jobs/{job_id}/estimate", response_class=HTMLResponse)
+    def estimate_page(request: Request, job_id: str, error: str = ""):
+        loaded = _load(job_id)
+        review = build_review(
+            loaded["job"],
+            loaded["items"],
+            loaded["allowances"],
+            loaded["rfis"],
+            loaded["claims"],
+        )
+        return TEMPLATES.TemplateResponse(
+            request,
+            "estimate.html",
+            {
+                "contractor": CONTRACTOR,
+                "disclaimer": DISCLAIMER,
+                "review": review,
+                "error": error or review["estimate"].get("error") or "",
+            },
+        )
+
+    @app.post("/jobs/{job_id}/estimate")
+    async def upload_estimate(
+        job_id: str,
+        kind: str = Form("quantities"),
+        file: UploadFile = File(...),
+    ):
+        from urllib.parse import quote
+
+        from adel_takeoff.estimate import EstimateError, estimate_path, parse_upload, save_estimate
+
+        _load(job_id)
+        payload = await file.read()
+        try:
+            store = parse_upload(kind, file.filename or "upload", payload)
+        except EstimateError as exc:
+            return RedirectResponse(
+                url=f"/jobs/{job_id}/estimate?error={quote(str(exc))}",
+                status_code=303,
+            )
+        save_estimate(estimate_path(root, job_id), store)
+        return RedirectResponse(url=f"/jobs/{job_id}/estimate", status_code=303)
+
+    @app.post("/jobs/{job_id}/estimate/map")
+    def map_estimate(
+        job_id: str,
+        tag: str = Form(""),
+        description: str = Form(""),
+        quantity: str = Form(""),
+        unit: str = Form(""),
+        system: str = Form(""),
+        sheet: str = Form(""),
+        unit_price: str = Form(""),
+    ):
+        from urllib.parse import quote
+
+        from adel_takeoff.estimate import (
+            EstimateError,
+            apply_mapping,
+            estimate_path,
+            load_estimate,
+            save_estimate,
+        )
+
+        _load(job_id)
+        path = estimate_path(root, job_id)
+        store = load_estimate(path)
+        try:
+            updated = apply_mapping(
+                store,
+                {
+                    "tag": tag,
+                    "description": description,
+                    "quantity": quantity,
+                    "unit": unit,
+                    "system": system,
+                    "sheet": sheet,
+                    "unit_price": unit_price,
+                },
+            )
+        except EstimateError as exc:
+            return RedirectResponse(
+                url=f"/jobs/{job_id}/estimate?error={quote(str(exc))}",
+                status_code=303,
+            )
+        save_estimate(path, updated)
+        return RedirectResponse(url=f"/jobs/{job_id}/estimate", status_code=303)
+
+    @app.post("/jobs/{job_id}/estimate/pair")
+    def pair_estimate(
+        job_id: str,
+        estimator_id: str = Form(""),
+        engine_line_id: str = Form(""),
+    ):
+        from urllib.parse import quote
+
+        from adel_takeoff.estimate import (
+            EstimateError,
+            base_engine_ids,
+            estimate_path,
+            load_estimate,
+            save_estimate,
+            set_pair,
+        )
+
+        loaded = _load(job_id)
+        review = build_review(
+            loaded["job"],
+            loaded["items"],
+            loaded["allowances"],
+            loaded["rfis"],
+            loaded["claims"],
+        )
+        path = estimate_path(root, job_id)
+        try:
+            updated = set_pair(
+                load_estimate(path),
+                estimator_id.strip(),
+                engine_line_id.strip(),
+                base_engine_ids(review["lines"]),
+            )
+        except EstimateError as exc:
+            return RedirectResponse(
+                url=f"/jobs/{job_id}/estimate?error={quote(str(exc))}",
+                status_code=303,
+            )
+        save_estimate(path, updated)
+        return RedirectResponse(url=f"/jobs/{job_id}/estimate", status_code=303)
+
+    @app.post("/jobs/{job_id}/estimate/clear")
+    def clear_estimate_pair(job_id: str, estimator_id: str = Form("")):
+        from urllib.parse import quote
+
+        from adel_takeoff.estimate import EstimateError, clear_pair, estimate_path, load_estimate, save_estimate
+
+        _load(job_id)
+        path = estimate_path(root, job_id)
+        try:
+            updated = clear_pair(load_estimate(path), estimator_id.strip())
+        except EstimateError as exc:
+            return RedirectResponse(
+                url=f"/jobs/{job_id}/estimate?error={quote(str(exc))}",
+                status_code=303,
+            )
+        save_estimate(path, updated)
+        return RedirectResponse(url=f"/jobs/{job_id}/estimate", status_code=303)
+
     @app.get("/jobs/{job_id}/zones", response_class=HTMLResponse)
     def zones_page(request: Request, job_id: str, page: int = 0, error: str = ""):
         loaded = _load(job_id)

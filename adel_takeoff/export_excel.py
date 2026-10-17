@@ -263,6 +263,7 @@ def build_workbook(job: dict, items, allowances, rfis, claims) -> bytes:
     _write_notes(workbook, review.get("notes") or [], review.get("notes_warning") or "")
     _write_zones(workbook, review.get("zones") or [], review.get("zone_rollups") or [])
     _write_sheet_index(workbook, review.get("sheet_index") or [])
+    _write_estimate(workbook, review.get("estimate") or {})
     _write_coordination(workbook, review.get("coordination") or [])
     _write_materials(workbook, review["materials"])
     _write_labor(workbook, job, review["labor"], review.get("assembly_warning") or "")
@@ -372,6 +373,68 @@ def _write_sheet_index(workbook: Workbook, rows: list[dict]) -> None:
         ]
         for column, value in enumerate(values, start=1):
             sheet.cell(index, column, value)
+
+
+def _write_estimate(workbook: Workbook, estimate: dict) -> None:
+    sheet = workbook.create_sheet("Estimator vs Engine")
+    threshold = estimate.get("threshold") or "0.90"
+    sheet["A1"] = (
+        "Estimator quantities beside the engine count. "
+        f"A fuzzy pair is automatic only when one engine line scores {threshold} or higher. "
+        "A lower score stays unpaired until you confirm it. "
+        "Delta is the engine quantity minus the estimator quantity. "
+        "The price delta uses the estimator unit price when one was imported."
+    )
+    headers = [
+        "Estimator tag",
+        "Description",
+        "Estimator qty",
+        "Engine qty",
+        "Unit",
+        "Unit price",
+        "Delta",
+        "Price delta",
+        "Status",
+        "Firm or needs-review",
+        "Engine sheet refs",
+        "System",
+    ]
+    for column, header in enumerate(headers, start=1):
+        cell = sheet.cell(3, column, header)
+        cell.font = Font(bold=True)
+    rows = estimate.get("rows") or []
+    if not rows:
+        sheet.cell(4, 1, "No estimator import")
+        return
+    for index, row in enumerate(rows, start=4):
+        values = [
+            row.get("tag") or None,
+            row.get("description") or None,
+            _excel_decimal(row.get("estimator_qty")),
+            _excel_decimal(row.get("engine_qty")),
+            row.get("unit") or None,
+            _excel_decimal(row.get("unit_price")),
+            _excel_decimal(row.get("delta")),
+            _excel_decimal(row.get("price_delta")),
+            row.get("status") or None,
+            row.get("review") or None,
+            row.get("sheets") or None,
+            row.get("system") or None,
+        ]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(index, column, value)
+    totals = 4 + len(rows)
+    sheet.cell(totals, 1, "Totals")
+    sheet.cell(totals, 2, "Firm price delta")
+    sheet.cell(totals, 3, _excel_decimal(estimate.get("firm_price_delta")))
+    sheet.cell(totals, 4, "Needs-review price delta")
+    sheet.cell(totals, 5, _excel_decimal(estimate.get("review_price_delta")))
+
+
+def _excel_decimal(value):
+    if value is None or value == "":
+        return None
+    return Decimal(str(value))
 
 
 def _write_quantity_row(sheet, row_index: int, line: dict, rate_labels: dict) -> None:

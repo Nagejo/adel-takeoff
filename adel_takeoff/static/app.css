@@ -166,6 +166,8 @@ tr.status-unmatched { background: #fff1f1; }
 .symbol-form input[type="text"] { width: 8rem; }
 .symbol-form fieldset { margin: 0.6rem 0; }
 .zone-form label { display: inline-block; margin: 0.3rem 0.8rem 0.3rem 0; }
+.estimate-form { display: block; margin: 0.6rem 0 1rem; }
+.estimate-form label { display: inline-block; margin: 0.3rem 0.8rem 0.3rem 0; }
 .zone-form textarea { width: 18rem; height: 4rem; vertical-align: top; }
 .zone-canvas { overflow: auto; max-height: 36rem; border: 1px solid var(--line); background: white; }
 #zone-sheet { display: block; cursor: crosshair; }
