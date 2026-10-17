@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Zones{% endblock %}
+{% block body %}
+<p class="nav"><a href="/jobs/{{ review.job.id }}">Job settings</a> · <a href="/jobs/{{ review.job.id }}/review">Review counts</a> · <a href="/jobs/{{ review.job.id }}/export.xlsx">Download Excel</a> · <a href="/jobs/{{ review.job.id }}/export.pdf">Download marked-up PDF</a></p>
+<h1>Zones</h1>
+<p class="note" id="zone-note">Draw or enter a rectangle or a polygon on one sheet. Name it and choose alternate, phase, floor, area, or by others / NIC. The same name on another sheet rolls up together. A mark inside a by others / NIC zone stays listed and leaves the base total. An alternate is an add or a deduct line, not part of the base.</p>
+{% if error %}<p class="warning" id="zone-error">{{ error }}</p>{% endif %}
+
+<h2>Add a zone</h2>
+<form method="post" action="/jobs/{{ review.job.id }}/zones" class="zone-form" id="add-zone">
+  <label>Name
+    <input name="name" id="zone-name" type="text" required>
+  </label>
+  <label>Type
+    <select name="type" id="zone-type">
+      <option value="floor">Floor</option>
+      <option value="phase">Phase</option>
+      <option value="area">Area</option>
+      <option value="alternate">Alternate</option>
+      <option value="by_others">By others / NIC</option>
+    </select>
+  </label>
+  <label>Alternate side
+    <select name="alternate" id="zone-side">
+      <option value="">Not an alternate</option>
+      <option value="add">Add</option>
+      <option value="deduct">Deduct</option>
+    </select>
+  </label>
+  <label>Shape
+    <select name="shape" id="zone-shape">
+      <option value="rectangle">Rectangle</option>
+      <option value="polygon">Polygon</option>
+    </select>
+  </label>
+  <label>Sheet
+    <select name="page_index" id="zone-page">
+      {% for sheet in sheets %}
+      <option value="{{ sheet.page_index }}" {% if current and sheet.page_index == current.page_index %}selected{% endif %}>{{ sheet.sheet }}{% if sheet.sheet_title %} — {{ sheet.sheet_title }}{% endif %}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Corners
+    <textarea name="points" id="zone-points" placeholder="100,180 260,320"></textarea>
+  </label>
+  <button type="submit">Save zone</button>
+</form>
+{% if current %}
+<p class="note">Click the sheet to record corners, in PDF points. A rectangle keeps the last two clicks. A polygon keeps every click. You can also type the corners.</p>
+<p class="sheet-links">
+  {% for sheet in sheets %}
+  <a href="/jobs/{{ review.job.id }}/zones?page={{ sheet.page_index }}">{{ sheet.sheet }}</a>{% if not loop.last %} · {% endif %}
+  {% endfor %}
+</p>
+<div class="zone-canvas">
+  <img id="zone-sheet" src="/jobs/{{ review.job.id }}/zones/page.png?page={{ current.page_index }}" width="{{ current.width|int }}" height="{{ current.height|int }}" alt="{{ current.sheet }}">
+</div>
+{% endif %}
+
+<h2>Zones on this job</h2>
+<table id="zone-list">
+  <thead>
+    <tr><th>ID</th><th>Name</th><th>Type</th><th>Side</th><th>Sheet</th><th>Shape</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for zone in review.zones %}
+    <tr id="zone-{{ zone.id }}">
+      <td>{{ zone.id }}</td>
+      <td>{{ zone.name }}</td>
+      <td>{{ zone.type }}</td>
+      <td>{{ zone.alternate }}</td>
+      <td>{{ zone.sheet }}</td>
+      <td>{{ zone.shape }}</td>
+      <td>
+        <form method="post" action="/jobs/{{ review.job.id }}/zones/{{ zone.id }}/delete">
+          <button type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7">No zones yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<script>
+(function () {
+  var image = document.getElementById("zone-sheet");
+  var field = document.getElementById("zone-points");
+  var shape = document.getElementById("zone-shape");
+  if (!image || !field) return;
+  image.addEventListener("click", function (event) {
+    var x = Math.round(event.offsetX * 10) / 10;
+    var y = Math.round(event.offsetY * 10) / 10;
+    var next = x + "," + y;
+    var current = field.value.trim();
+    var parts = current ? current.split(/\s+/) : [];
+    parts.push(next);
+    if (shape && shape.value === "rectangle" && parts.length > 2) {
+      parts = parts.slice(-2);
+    }
+    field.value = parts.join(" ");
+  });
+})();
+</script>
+{% endblock %}

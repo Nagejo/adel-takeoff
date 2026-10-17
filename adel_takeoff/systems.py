@@ -36,6 +36,8 @@ def _kept(row: dict) -> bool:
         return False
     if row.get("review_status") == "rejected" or row.get("exclusion"):
         return False
+    if row.get("zone_hold"):
+        return False
     return _measured(row) > 0
 
 
