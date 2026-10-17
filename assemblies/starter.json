@@ -1,0 +1,122 @@
+{
+  "note": "EXAMPLE values. Every per-unit quantity and labor hour in this file is an example the estimator must confirm. These are not a published labor standard. Raceway and conductor lengths are allowances because measured lengths are not available.",
+  "catalog_version": "example-1",
+  "assemblies": [
+    {
+      "id": "gfci",
+      "name": "GFCI receptacle",
+      "version": "example-1",
+      "example": true,
+      "matches": ["gfci", "gfi"],
+      "labor_hours": "1.00",
+      "labor_rate_key": "journeyman",
+      "parts": [
+        {"role": "device", "description": "GFCI receptacle", "quantity": "1", "unit": "EA"},
+        {"role": "plate", "description": "GFCI plate", "quantity": "1", "unit": "EA"},
+        {"role": "box", "description": "Single-gang box", "quantity": "1", "unit": "EA"},
+        {"role": "raceway", "description": "Raceway allowance", "quantity": "10", "unit": "LF", "size": "1/2", "allowance": true},
+        {"role": "conductor", "description": "Conductor allowance", "quantity": "30", "unit": "LF", "size": "12", "count": "3", "allowance": true},
+        {"role": "misc", "description": "Wire connectors", "quantity": "3", "unit": "EA"}
+      ]
+    },
+    {
+      "id": "dimmer",
+      "name": "Dimmer",
+      "version": "example-1",
+      "example": true,
+      "matches": ["dimmer"],
+      "labor_hours": "0.50",
+      "labor_rate_key": "journeyman",
+      "parts": [
+        {"role": "device", "description": "Dimmer", "quantity": "1", "unit": "EA"},
+        {"role": "plate", "description": "Dimmer plate", "quantity": "1", "unit": "EA"},
+        {"role": "box", "description": "Single-gang box", "quantity": "1", "unit": "EA"},
+        {"role": "raceway", "description": "Raceway allowance", "quantity": "10", "unit": "LF", "size": "1/2", "allowance": true},
+        {"role": "conductor", "description": "Conductor allowance", "quantity": "20", "unit": "LF", "size": "12", "count": "2", "allowance": true},
+        {"role": "misc", "description": "Wire connectors", "quantity": "2", "unit": "EA"}
+      ]
+    },
+    {
+      "id": "duplex",
+      "name": "Duplex receptacle",
+      "version": "example-1",
+      "example": true,
+      "matches": ["duplex"],
+      "labor_hours": "1.00",
+      "labor_rate_key": "journeyman",
+      "parts": [
+        {"role": "device", "description": "Duplex receptacle", "quantity": "1", "unit": "EA"},
+        {"role": "plate", "description": "Duplex plate", "quantity": "1", "unit": "EA"},
+        {"role": "box", "description": "Single-gang box", "quantity": "1", "unit": "EA"},
+        {"role": "raceway", "description": "Raceway allowance", "quantity": "10", "unit": "LF", "size": "1/2", "allowance": true},
+        {"role": "conductor", "description": "Conductor allowance", "quantity": "30", "unit": "LF", "size": "12", "count": "3", "allowance": true},
+        {"role": "misc", "description": "Wire connectors", "quantity": "2", "unit": "EA"}
+      ]
+    },
+    {
+      "id": "data-lv",
+      "name": "Data or low-voltage outlet",
+      "version": "example-1",
+      "example": true,
+      "matches": ["data", "low voltage", "lv outlet"],
+      "labor_hours": "0.50",
+      "labor_rate_key": "journeyman",
+      "parts": [
+        {"role": "device", "description": "Data outlet", "quantity": "1", "unit": "EA"},
+        {"role": "plate", "description": "Data plate", "quantity": "1", "unit": "EA"},
+        {"role": "box", "description": "Single-gang box", "quantity": "1", "unit": "EA"},
+        {"role": "raceway", "description": "Raceway allowance", "quantity": "10", "unit": "LF", "size": "3/4", "allowance": true},
+        {"role": "conductor", "description": "Conductor allowance", "quantity": "10", "unit": "LF", "size": "cat6", "count": "1", "allowance": true},
+        {"role": "misc", "description": "Data connector", "quantity": "1", "unit": "EA"}
+      ]
+    },
+    {
+      "id": "junction-box",
+      "name": "Junction box",
+      "version": "example-1",
+      "example": true,
+      "matches": ["junction box", "j-box"],
+      "labor_hours": "0.50",
+      "labor_rate_key": "journeyman",
+      "parts": [
+        {"role": "box", "description": "Junction box", "quantity": "1", "unit": "EA"},
+        {"role": "raceway", "description": "Raceway allowance", "quantity": "10", "unit": "LF", "size": "1/2", "allowance": true},
+        {"role": "conductor", "description": "Conductor allowance", "quantity": "30", "unit": "LF", "size": "12", "count": "3", "allowance": true},
+        {"role": "misc", "description": "Wire connectors", "quantity": "4", "unit": "EA"}
+      ]
+    },
+    {
+      "id": "recessed-fixture",
+      "name": "Recessed fixture",
+      "version": "example-1",
+      "example": true,
+      "matches": ["recessed", "downlight"],
+      "labor_hours": "1.00",
+      "labor_rate_key": "journeyman",
+      "parts": [
+        {"role": "device", "description": "Recessed fixture", "quantity": "1", "unit": "EA"},
+        {"role": "box", "description": "Fixture box", "quantity": "1", "unit": "EA"},
+        {"role": "raceway", "description": "Raceway allowance", "quantity": "10", "unit": "LF", "size": "1/2", "allowance": true},
+        {"role": "conductor", "description": "Conductor allowance", "quantity": "30", "unit": "LF", "size": "12", "count": "3", "allowance": true},
+        {"role": "misc", "description": "Fixture trim", "quantity": "1", "unit": "EA"}
+      ]
+    },
+    {
+      "id": "switch",
+      "name": "Switch",
+      "version": "example-1",
+      "example": true,
+      "matches": ["switch"],
+      "labor_hours": "0.50",
+      "labor_rate_key": "journeyman",
+      "parts": [
+        {"role": "device", "description": "Switch", "quantity": "1", "unit": "EA"},
+        {"role": "plate", "description": "Switch plate", "quantity": "1", "unit": "EA"},
+        {"role": "box", "description": "Single-gang box", "quantity": "1", "unit": "EA"},
+        {"role": "raceway", "description": "Raceway allowance", "quantity": "10", "unit": "LF", "size": "1/2", "allowance": true},
+        {"role": "conductor", "description": "Conductor allowance", "quantity": "20", "unit": "LF", "size": "12", "count": "2", "allowance": true},
+        {"role": "misc", "description": "Wire connectors", "quantity": "2", "unit": "EA"}
+      ]
+    }
+  ]
+}

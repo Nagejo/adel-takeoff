@@ -193,6 +193,18 @@ def line_from_members(members: list[dict], *, excluded_reason: str = "") -> dict
         "item_ids": ids,
         "label": members[0]["label"],
         "category": members[0]["category"],
+        "assembly_id": members[0].get("assembly_id") or "",
+        "assembly_name": members[0].get("assembly_name") or "",
+        "assembly_version": members[0].get("assembly_version") or "",
+        "assembly_confirmed": bool(members[0].get("assembly_confirmed")),
+        "assembly_example": bool(members[0].get("assembly_example")),
+        "assembly_hours_per_unit": _same_number(
+            [row.get("assembly_hours_per_unit") for row in members]
+        ),
+        "assembly_labor_hours": _sum_decimal(
+            [row.get("assembly_labor_hours") for row in members]
+        ),
+        "assembly_rate_key": members[0].get("assembly_rate_key") or "",
         "scope": members[0]["scope"],
         "measured": measured,
         "override": override,

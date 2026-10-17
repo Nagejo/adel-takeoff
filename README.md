@@ -27,6 +27,8 @@ This is an internal tool. It is not a product for other contractors. It is not D
 - Read a lighting fixture schedule and a panel schedule when the drawing prints one. A fixture type tag is linked to that schedule row's description, mounting, and voltage. A panel and circuit tag is linked to that circuit's schedule row. Mounting height is copied from the schedule, or from a height tag on the plan when the schedule does not print one.
 - When a type tag has no schedule row, a schedule row has no plan marks, a plan circuit is missing from the panel schedule, or the plan count and the schedule count differ, both facts are written to a Discrepancies sheet. The plan count is kept. A discrepancy lowers a recorded confidence flag to check and does not create a flag when the detector recorded no score.
 - The Excel report adds the copied schedule columns and a per-type rollup by sheet and floor. Summing the per-sheet counts can count an overlap device twice. The rollup also keeps the unique device count.
+- Expand each counted device into the parts on its assembly: device, plate, box, a raceway allowance, a conductor allowance, miscellaneous parts, and labor hours per unit. Part quantity is the takeoff count times the per-unit quantity. The Materials sheet rolls those parts up and keeps the source item ids. The Labor sheet rolls hours up per line and in total. Rates stay on their own lines.
+- Assemblies are edited in `assemblies/starter.json`. Per-job overrides are `data/assemblies/<job-id>.json`, and the assemblies page writes that file. Every starter quantity and labor hour is an example. The export shows an unconfirmed-assembly warning, and example hours stay out of direct cost, until the estimator confirms that assembly. Confirming an assembly does not make the hours a published labor standard. Raceway and conductor lengths are allowances. Excluded and rejected devices are not expanded.
 
 The legend is the stack of labeled symbols under the heading `SYMBOL LEGEND`. Rows more than 72 points apart are not treated as the same legend. Match lines need a shared key and one overlap depth, for example `MATCH LINE ML-A OVERLAP 120`.
 
@@ -35,7 +37,8 @@ The legend is the stack of labeled symbols under the heading `SYMBOL LEGEND`. Ro
 - Conduit routing, wire sizing, voltage drop, derating, home-run grouping, or Revit / BIM output.
 - Invented or eyeballed counts, guessed panel or circuit links, a price book, or default labor hours.
 - A text-tag detector. The count method can record `text tag` when a future detector emits one. This version does not.
-- Assemblies, drawing scale, and revision comparison.
+- Drawing scale and measured raceway lengths. Assembly raceway and conductor lengths are allowances until that exists.
+- Revision comparison.
 - A schedule value that the drawing did not print. A blank cell stays blank.
 - A confidence flag with no detector score. Blank means no score. It is not filled in.
 - A default markup.
@@ -56,7 +59,7 @@ python -m adel_takeoff
 
 Open http://127.0.0.1:8000
 
-Jobs are stored under `./data`. Review decisions are `data/reviews/<job-id>.json`.
+Jobs are stored under `./data`. Review decisions are `data/reviews/<job-id>.json`. Assembly overrides are `data/assemblies/<job-id>.json`. The starter assemblies are `assemblies/starter.json`.
 
 The same actions are available from the command line:
 

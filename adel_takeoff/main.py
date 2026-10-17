@@ -22,6 +22,17 @@ from adel_takeoff.constants import (
     LABOR_RATES,
     PM_DEFAULT,
 )
+from adel_takeoff.assemblies import (
+    AssemblyError,
+    catalog_for_job,
+    data_dir_for_job,
+    load_overrides,
+    load_starter,
+    override_path,
+    save_overrides,
+    starter_catalog_path,
+    submission_to_overrides,
+)
 from adel_takeoff.code_notes import edition_for
 from adel_takeoff.costing import MarkupRejected, parse_markup, parse_rate
 from adel_takeoff.db import (
@@ -265,6 +276,85 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
                 },
             )
         return RedirectResponse(url=f"/jobs/{job_id}", status_code=303)
+
+    def _assembly_page(request: Request, job_id: str, error: str = "", status_code: int = 200):
+        loaded = _load(job_id)
+        catalog = catalog_for_job(loaded["job"])
+        display = [
+            "duplex",
+            "gfci",
+            "switch",
+            "dimmer",
+            "recessed-fixture",
+            "junction-box",
+            "data-lv",
+        ]
+        order = {name: index for index, name in enumerate(display)}
+        shown = sorted(catalog, key=lambda item: order.get(item.id, len(order)))
+        review = build_review(
+            loaded["job"],
+            loaded["items"],
+            loaded["allowances"],
+            loaded["rfis"],
+            loaded["claims"],
+        )
+        data_dir = data_dir_for_job(loaded["job"]) or root
+        return TEMPLATES.TemplateResponse(
+            request,
+            "assemblies.html",
+            {
+                "contractor": CONTRACTOR,
+                "disclaimer": DISCLAIMER,
+                "job": loaded["job"],
+                "assemblies": shown,
+                "labor_rates": LABOR_RATES,
+                "starter_path": str(starter_catalog_path()),
+                "override_path": str(override_path(data_dir, job_id)),
+                "assembly_warning": review["assembly_warning"],
+                "error": error,
+            },
+            status_code=status_code,
+        )
+
+    @app.get("/jobs/{job_id}/assemblies", response_class=HTMLResponse)
+    def assemblies_page(request: Request, job_id: str):
+        return _assembly_page(request, job_id)
+
+    @app.post("/jobs/{job_id}/assemblies")
+    async def save_assemblies(request: Request, job_id: str):
+        loaded = _load(job_id)
+        form = await request.form()
+        starter = load_starter()
+        submitted = {}
+        for assembly in starter:
+            if f"labor_{assembly.id}" not in form and f"qty_{assembly.id}_device" not in form and f"qty_{assembly.id}_box" not in form:
+                continue
+            parts = {}
+            for part in assembly.parts:
+                parts[part.role] = {
+                    "quantity": form.get(f"qty_{assembly.id}_{part.role}", ""),
+                    "size": form.get(f"size_{assembly.id}_{part.role}", ""),
+                    "count": form.get(f"count_{assembly.id}_{part.role}", ""),
+                }
+            submitted[assembly.id] = {
+                "confirmed": form.get(f"confirmed_{assembly.id}") == "yes",
+                "labor_hours": form.get(f"labor_{assembly.id}", ""),
+                "labor_rate_key": form.get(f"rate_{assembly.id}", assembly.labor_rate_key),
+                "parts": parts,
+            }
+        data_dir = data_dir_for_job(loaded["job"])
+        if data_dir is None:
+            raise HTTPException(status_code=400, detail="This job has no data directory for assembly overrides.")
+        path = override_path(data_dir, job_id)
+        try:
+            fresh = submission_to_overrides(starter, submitted)["overrides"]
+            existing = load_overrides(path)["overrides"]
+        except AssemblyError as exc:
+            return _assembly_page(request, job_id, error=str(exc), status_code=400)
+        merged = {key: value for key, value in existing.items() if key not in submitted}
+        merged.update(fresh)
+        save_overrides(path, {"overrides": merged})
+        return RedirectResponse(url=f"/jobs/{job_id}/assemblies", status_code=303)
 
     @app.get("/jobs/{job_id}/review", response_class=HTMLResponse)
     def review_page(request: Request, job_id: str):
