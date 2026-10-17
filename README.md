@@ -123,6 +123,22 @@ python -m adel_takeoff
 
 Then open `/jobs/<id>/notes`, `/jobs/<id>/coordination`, `/jobs/<id>/export.xlsx`, and `/jobs/<id>/rfi.docx`.
 
+## Zones
+
+Open a job's Zones page and draw or type a rectangle or a polygon on one sheet. Each zone has a name and a type: alternate, phase, floor, area, or by others / NIC. An alternate also has a side, add or deduct. The corners are PDF points. Clicking the sheet records them.
+
+A counted mark is assigned to every zone that contains the center of its mark on that sheet. `Level 2` on E-2 and `Level 2` on E-3 are one zone in the rollup. A mark that sits in two zones of the same type on the same point is flagged for review and assigned to neither of them. A floor and a phase can both apply. A by others / NIC zone stays on the takeoff and is left out of the base total. An alternate's quantity is an add or deduct line, not part of the base.
+
+The Excel report adds a Zone column on Quantities and a Zones sheet with the zone list and the rollup by zone and system. The marked-up PDF draws each zone outline and its name.
+
+```bash
+python -m adel_takeoff
+```
+
+Then open `/jobs/<id>/zones`, save a zone, and open Review counts, the Excel download, and the marked-up PDF.
+
+Zones are not detected from the drawing. The estimator names them. An overlap is flagged rather than resolved. There is no routing.
+
 ## Accuracy benchmark
 
 A set folder holds the drawing and the expected result:

@@ -35,6 +35,7 @@ QUANTITY_HEADERS = [
     "Line",
     "Item IDs",
     "Item",
+    "Zone",
     "Assembly",
     "Assembly version",
     "Assembly labor hours",
@@ -143,9 +144,32 @@ def build_workbook(job: dict, items, allowances, rfis, claims) -> bytes:
 
     row_index = header_row + 1
     rate_labels = {key: label for key, label, _default in LABOR_RATES}
-    for line in review["lines"]:
+    base_lines = [line for line in review["lines"] if line.get("counts_in_base", True)]
+    nic_lines = [line for line in review["lines"] if line.get("zone_hold") == "by_others"]
+    alternate_lines = [line for line in review["lines"] if line.get("zone_hold") == "alternate"]
+    for line in base_lines:
         _write_quantity_row(sheet, row_index, line, rate_labels)
         row_index += 1
+    if nic_lines:
+        row_index += 1
+        sheet.cell(row_index, 1, "By others / NIC").font = Font(bold=True)
+        sheet.cell(row_index, 2, "Listed here and left out of the base total.")
+        row_index += 1
+        for line in nic_lines:
+            _write_quantity_row(sheet, row_index, line, rate_labels)
+            row_index += 1
+    if alternate_lines:
+        row_index += 1
+        sheet.cell(row_index, 1, "Alternate add / deduct").font = Font(bold=True)
+        sheet.cell(
+            row_index,
+            2,
+            "Alternate quantities are separate add or deduct lines. They are not in the base total.",
+        )
+        row_index += 1
+        for line in alternate_lines:
+            _write_quantity_row(sheet, row_index, line, rate_labels)
+            row_index += 1
 
     row_index += 1
     sheet.cell(row_index, 1, "Allowances").font = Font(bold=True)
@@ -237,6 +261,7 @@ def build_workbook(job: dict, items, allowances, rfis, claims) -> bytes:
     _write_scope_split(workbook, review.get("scope_split") or [])
     _write_discrepancies(workbook, review["discrepancies"])
     _write_notes(workbook, review.get("notes") or [], review.get("notes_warning") or "")
+    _write_zones(workbook, review.get("zones") or [], review.get("zone_rollups") or [])
     _write_coordination(workbook, review.get("coordination") or [])
     _write_materials(workbook, review["materials"])
     _write_labor(workbook, job, review["labor"], review.get("assembly_warning") or "")
@@ -250,12 +275,81 @@ def build_workbook(job: dict, items, allowances, rfis, claims) -> bytes:
     return buffer.getvalue()
 
 
+def _zone_cell(line: dict):
+    parts = []
+    if line.get("zone_conflict_text"):
+        parts.append(line["zone_conflict_text"])
+    if line.get("zone"):
+        parts.append(line["zone"])
+    if line.get("zone_hold") == "by_others":
+        parts.append("not in base")
+    elif line.get("zone_hold") == "alternate":
+        side = line.get("alternate_side") or ""
+        parts.append(f"alternate {side}".strip())
+        parts.append("not in base")
+    return "; ".join(parts) or None
+
+
+def _write_zones(workbook: Workbook, zones: list[dict], rollups: list[dict]) -> None:
+    from adel_takeoff.zones import type_label
+
+    sheet = workbook.create_sheet("Zones")
+    sheet["A1"] = (
+        "A zone is a rectangle or polygon named by the estimator. "
+        "The same name on another sheet is one zone. "
+        "An item in two zones of the same type on one point is flagged and assigned to neither. "
+        "By others / NIC and alternate quantities stay listed and stay out of the base total."
+    )
+    headers = ["ID", "Name", "Type", "Side", "Sheet", "Page", "Shape"]
+    for column, header in enumerate(headers, start=1):
+        cell = sheet.cell(3, column, header)
+        cell.font = Font(bold=True)
+    if not zones:
+        sheet.cell(4, 1, "No zones")
+    for index, zone in enumerate(zones, start=4):
+        values = [
+            zone["id"],
+            zone["name"],
+            type_label(zone["type"]),
+            zone.get("alternate") or None,
+            zone.get("sheet") or None,
+            int(zone["page_index"]) + 1,
+            zone["shape"],
+        ]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(index, column, value)
+    rollup_row = 4 + max(len(zones), 1) + 2
+    sheet.cell(rollup_row, 1, "Rollup by zone and system").font = Font(bold=True)
+    rollup_row += 1
+    rollup_headers = ["Zone", "Type", "System", "Quantity", "Side", "In base"]
+    for column, header in enumerate(rollup_headers, start=1):
+        cell = sheet.cell(rollup_row, column, header)
+        cell.font = Font(bold=True)
+    rollup_row += 1
+    if not rollups:
+        sheet.cell(rollup_row, 1, "No zone quantities")
+        return
+    for rollup in rollups:
+        values = [
+            rollup["name"],
+            rollup["type_label"],
+            rollup["system"],
+            rollup["quantity"],
+            rollup["side"] or None,
+            "yes" if rollup["in_base"] else "no",
+        ]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(rollup_row, column, value)
+        rollup_row += 1
+
+
 def _write_quantity_row(sheet, row_index: int, line: dict, rate_labels: dict) -> None:
     rate_key = line["labor_rate_key"]
     values = [
         line["line_id"],
         ", ".join(line["item_ids"]),
         line["label"],
+        _zone_cell(line),
         line.get("assembly_name") or None,
         line.get("assembly_version") or None,
         _number(_decimal_or_none(line.get("assembly_labor_hours"))),

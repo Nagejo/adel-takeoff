@@ -251,6 +251,14 @@ def present_item(item: dict, job: dict) -> dict:
         "decision_label": _decision_label(review_status, exclusion, status),
         "occurrences": occurrences,
         "keynotes": [],
+        "zones": [],
+        "zone_conflicts": [],
+        "zone_conflict_text": "",
+        "zone_label": "",
+        "zone_hold": "",
+        "alternate_side": "",
+        "counts_in_base": True,
+        "zone_key": (),
     }
     presented["how_counted"] = how_counted([presented])
     return presented
@@ -286,7 +294,7 @@ def review_totals(rows: list[dict], allowances: list[dict], markup) -> dict:
     direct = Decimal("0")
     for row in rows:
         effective = row["effective"]
-        if effective is None:
+        if effective is None or row.get("zone_hold"):
             continue
         if row["category"] == "power":
             power += effective
@@ -359,10 +367,18 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
     text_index, _path = index_for_job(job)
     catalog = catalog_for_job(job)
     apply_assemblies(rows, job, catalog)
+    from adel_takeoff.zones import assign_zones, load_zones, zone_rollups, zones_path
+
+    zones = []
+    data_dir = data_dir_for_job(job)
+    if data_dir is not None and job.get("id"):
+        zones = load_zones(zones_path(data_dir, str(job["id"])))
+    assign_zones(rows, zones)
     allowance_rows = [present_allowance(row, job) for row in allowances]
     totals = review_totals(rows, allowance_rows, job.get("markup"))
     totals["journeyman_warning"] = journeyman_warning(_decimal(job["rate_journeyman"]))
     lines = quantity_lines(rows)
+    base_lines = [line for line in lines if line.get("counts_in_base", True)]
     scale_report = report_for_job(job)
     revision = _revision_for_job(job)
     unresolved = [
@@ -378,8 +394,10 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
         "rows": rows,
         "lines": lines,
         "excluded": excluded_lines(rows),
-        "materials": material_rows(lines, catalog),
-        "labor": labor_rows(lines, job),
+        "materials": material_rows(base_lines, catalog),
+        "labor": labor_rows(base_lines, job),
+        "zones": zones,
+        "zone_rollups": zone_rollups(rows),
         "assembly_warning": assembly_warning(lines),
         "scales": scale_report["sheets"],
         "measurements": scale_report["measurements"],

@@ -980,6 +980,100 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
             status_code=303,
         )
 
+    @app.get("/jobs/{job_id}/zones", response_class=HTMLResponse)
+    def zones_page(request: Request, job_id: str, page: int = 0, error: str = ""):
+        loaded = _load(job_id)
+        review = build_review(
+            loaded["job"],
+            loaded["items"],
+            loaded["allowances"],
+            loaded["rfis"],
+            loaded["claims"],
+        )
+        pdf_bytes = Path(loaded["job"]["pdf_path"]).read_bytes()
+        sheets = sheet_choices(pdf_bytes)
+        current = None
+        if sheets:
+            page = min(max(page, 0), len(sheets) - 1)
+            current = sheets[page]
+        return TEMPLATES.TemplateResponse(
+            request,
+            "zones.html",
+            {
+                "contractor": CONTRACTOR,
+                "disclaimer": DISCLAIMER,
+                "review": review,
+                "sheets": sheets,
+                "current": current,
+                "error": error,
+            },
+        )
+
+    @app.post("/jobs/{job_id}/zones")
+    def save_zone(
+        job_id: str,
+        name: str = Form(""),
+        type: str = Form(""),
+        alternate: str = Form(""),
+        shape: str = Form("rectangle"),
+        page_index: str = Form("0"),
+        points: str = Form(""),
+    ):
+        from urllib.parse import quote
+
+        from adel_takeoff.zones import ZoneError, add_zone, zones_path
+
+        loaded = _load(job_id)
+        pdf_bytes = Path(loaded["job"]["pdf_path"]).read_bytes()
+        try:
+            add_zone(
+                zones_path(root, job_id),
+                {
+                    "name": name,
+                    "type": type,
+                    "alternate": alternate,
+                    "shape": shape,
+                    "page_index": page_index,
+                    "points": points,
+                },
+                sheet_choices(pdf_bytes),
+            )
+        except ZoneError as exc:
+            return RedirectResponse(
+                url=f"/jobs/{job_id}/zones?page={page_index}&error={quote(str(exc))}",
+                status_code=303,
+            )
+        return RedirectResponse(url=f"/jobs/{job_id}/zones?page={page_index}", status_code=303)
+
+    @app.post("/jobs/{job_id}/zones/{zone_id}/delete")
+    def remove_zone(job_id: str, zone_id: str):
+        from urllib.parse import quote
+
+        from adel_takeoff.zones import ZoneError, delete_zone, zones_path
+
+        _load(job_id)
+        try:
+            delete_zone(zones_path(root, job_id), zone_id)
+        except ZoneError as exc:
+            return RedirectResponse(
+                url=f"/jobs/{job_id}/zones?error={quote(str(exc))}",
+                status_code=303,
+            )
+        return RedirectResponse(url=f"/jobs/{job_id}/zones", status_code=303)
+
+    @app.get("/jobs/{job_id}/zones/page.png")
+    def zone_page_png(job_id: str, page: int = 0):
+        loaded = _load(job_id)
+        document = fitz.open(stream=Path(loaded["job"]["pdf_path"]).read_bytes(), filetype="pdf")
+        try:
+            if page < 0 or page >= document.page_count:
+                raise HTTPException(status_code=404, detail="That sheet is not in this set.")
+            pixmap = document[page].get_pixmap()
+            payload = pixmap.tobytes("png")
+        finally:
+            document.close()
+        return Response(content=payload, media_type="image/png")
+
     @app.get("/jobs/{job_id}/notes", response_class=HTMLResponse)
     def notes_page(request: Request, job_id: str):
         loaded = _load(job_id)

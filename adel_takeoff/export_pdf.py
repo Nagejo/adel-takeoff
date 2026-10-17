@@ -17,6 +17,13 @@ BY_OTHERS_COLOR = (0.35, 0.35, 0.35)
 REJECTED_COLOR = (0.55, 0.0, 0.0)
 EXCLUDED_COLOR = (0.25, 0.25, 0.25)
 SCHEDULE_COLOR = (0, 0.45, 0.45)
+ZONE_COLORS = {
+    "alternate": (0.85, 0.45, 0.05),
+    "phase": (0.12, 0.28, 0.86),
+    "floor": (0.10, 0.55, 0.25),
+    "area": (0.45, 0.20, 0.65),
+    "by_others": (0.35, 0.35, 0.35),
+}
 
 
 def build_markup_pdf(pdf_bytes: bytes, job, items, allowances, rfis, claims) -> bytes:
@@ -48,6 +55,7 @@ def build_markup_pdf(pdf_bytes: bytes, job, items, allowances, rfis, claims) -> 
                     fontname="helv",
                     color=color,
                 )
+        _draw_zones(document, review.get("zones") or [])
         for region in review.get("schedule_regions") or []:
             page = document[region["page_index"]]
             x0, y0, x1, y1 = region["bbox"]
@@ -68,6 +76,31 @@ def build_markup_pdf(pdf_bytes: bytes, job, items, allowances, rfis, claims) -> 
         return document.tobytes()
     finally:
         document.close()
+
+
+def _draw_zones(document, zones: list[dict]) -> None:
+    from adel_takeoff.zones import type_label
+
+    for zone in zones:
+        page_index = int(zone["page_index"])
+        if page_index < 0 or page_index >= document.page_count:
+            continue
+        page = document[page_index]
+        points = [fitz.Point(point[0], point[1]) for point in zone["points"]]
+        color = ZONE_COLORS.get(zone["type"], (0.2, 0.2, 0.2))
+        page.draw_polyline(points, color=color, width=1.4, closePath=True)
+        left = min(point.x for point in points)
+        top = min(point.y for point in points)
+        label = f"{zone['name']} · {type_label(zone['type'])}"
+        if zone.get("alternate"):
+            label += f" ({zone['alternate']})"
+        page.insert_text(
+            fitz.Point(left, max(12, top - 4)),
+            label,
+            fontsize=8,
+            fontname="helv",
+            color=color,
+        )
 
 
 def _draw_number(page, rect: fitz.Rect, item_id: str, color) -> None:

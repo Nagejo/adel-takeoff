@@ -237,6 +237,11 @@ def line_from_members(members: list[dict], *, excluded_reason: str = "") -> dict
         "labor_rate_key": rate_keys.pop() if len(rate_keys) == 1 else "",
         "direct_cost": _sum_decimal([row.get("direct_cost") for row in members]),
         "excluded_reason": excluded_reason,
+        "zone": members[0].get("zone_label") or "",
+        "zone_hold": members[0].get("zone_hold") or "",
+        "alternate_side": members[0].get("alternate_side") or "",
+        "counts_in_base": not (members[0].get("zone_hold") or ""),
+        "zone_conflict_text": members[0].get("zone_conflict_text") or "",
     }
 
 
@@ -255,6 +260,12 @@ def quantity_lines(rows: list[dict]) -> list[dict]:
             row.get("circuit") or "",
             row.get("type_mark") or "",
             tuple(row.get("count_methods") or [row.get("count_method") or ""]),
+            row.get("zone_hold") or "",
+            tuple(row.get("zone_key") or ()),
+            tuple(
+                f"{item.get('type')}:{','.join(item.get('names') or [])}"
+                for item in (row.get("zone_conflicts") or [])
+            ),
         )
         if key not in index:
             index[key] = len(groups)

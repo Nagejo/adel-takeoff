@@ -2,7 +2,7 @@
 {% block title %}Review{% endblock %}
 {% block body %}
 <p class="nav"><a href="/jobs/{{ review.job.id }}">Job settings</a> · <a href="/jobs/{{ review.job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ review.job.id }}/scale">Scale</a> · <a href="/jobs/{{ review.job.id }}/revision">Revision</a> · <a href="/jobs/{{ review.job.id }}/search">Search</a> · <a href="/jobs/{{ review.job.id }}/symbols">Symbols</a> · <a href="/jobs/{{ review.job.id }}/export.xlsx">Download Excel quantity report</a> · <a href="/jobs/{{ review.job.id }}/export.pdf">Download marked-up PDF</a></p>
-<p class="nav"><a href="/jobs/{{ review.job.id }}/notes">Notes</a> · <a href="/jobs/{{ review.job.id }}/coordination">RFI log</a> · <a id="benchmark-truth" href="/jobs/{{ review.job.id }}/truth.zip">Download benchmark truth</a> · <a href="/jobs/{{ review.job.id }}/rfi.docx">Download RFI log</a></p>
+<p class="nav"><a href="/jobs/{{ review.job.id }}/notes">Notes</a> · <a href="/jobs/{{ review.job.id }}/coordination">RFI log</a> · <a href="/jobs/{{ review.job.id }}/zones">Zones</a> · <a id="benchmark-truth" href="/jobs/{{ review.job.id }}/truth.zip">Download benchmark truth</a> · <a href="/jobs/{{ review.job.id }}/rfi.docx">Download RFI log</a></p>
 {% if review.notes_warning %}
 <p class="warning" id="notes-warning">{{ review.notes_warning }}</p>
 {% endif %}
@@ -157,6 +157,32 @@
   </table>
 </section>
 
+<section id="zones">
+  <h2>Zones</h2>
+  <p class="note">A counted mark is assigned to each zone that contains its center on that sheet. The same zone name on another sheet rolls up as one zone. Two zones of the same type on one point are flagged, and the mark is assigned to neither. By others / NIC and alternate zones stay on the list and stay out of the base total.</p>
+  {% if review.zone_rollups %}
+  <table id="zone-rollups">
+    <thead>
+      <tr><th>Zone</th><th>Type</th><th>System</th><th>Quantity</th><th>Side</th><th>In base</th></tr>
+    </thead>
+    <tbody>
+      {% for rollup in review.zone_rollups %}
+      <tr>
+        <td>{{ rollup.name }}</td>
+        <td>{{ rollup.type_label }}</td>
+        <td>{{ rollup.system }}</td>
+        <td>{{ rollup.quantity }}</td>
+        <td>{{ rollup.side }}</td>
+        <td>{% if rollup.in_base %}yes{% else %}no{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p id="zones-empty">No zones on this job.</p>
+  {% endif %}
+</section>
+
 <h2>Detected counts</h2>
 <div class="table-scroll">
 <table>
@@ -166,6 +192,7 @@
       <th>Item</th>
       <th>Category</th>
       <th>Scope</th>
+      <th>Zone</th>
       <th>Measured</th>
       <th>Correction</th>
       <th>Effective</th>
@@ -182,11 +209,12 @@
   </thead>
   <tbody>
     {% for row in review.rows %}
-    <tr id="item-{{ row.id }}" class="item status-{{ row.status }}{% if row.deduped %} deduped{% endif %}" data-label="{{ row.label }}" data-category="{{ row.category }}">
+    <tr id="item-{{ row.id }}" class="item status-{{ row.status }}{% if row.deduped %} deduped{% endif %}{% if row.zone_conflicts %} zone-conflict{% endif %}" data-label="{{ row.label }}" data-category="{{ row.category }}">
       <td class="item-id">{{ row.id }}</td>
       <td class="label">{{ row.label }}{% if row.label != row.detected_label %} <span class="pill">detected {{ row.detected_label }}</span>{% endif %}{% if row.keynotes %} <span class="pill">keynote {{ row.keynotes | map(attribute='number') | join(', ') }}</span>{% endif %}</td>
       <td class="category">{{ row.category }}</td>
       <td class="scope">{{ row.scope }}</td>
+      <td class="zone">{% if row.zone_conflicts %}<span class="pill">Needs review</span> {{ row.zone_conflict_text }}{% endif %}{% if row.zone_label %}{{ row.zone_label }}{% endif %}{% if row.zone_hold %} <span class="pill">not in base</span>{% endif %}</td>
       <td class="measured">{% if row.measured is none %}{% else %}{{ row.measured }}{% endif %}</td>
       <td class="correction">
         {% if row.show_correction %}
