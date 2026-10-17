@@ -980,6 +980,58 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
             status_code=303,
         )
 
+    @app.get("/jobs/{job_id}/sheets", response_class=HTMLResponse)
+    def sheet_index_page(request: Request, job_id: str, error: str = ""):
+        from adel_takeoff.cleanup import BACKGROUND_CLEANUP
+        from adel_takeoff.sheets import CLASS_LABELS, SHEET_CLASSES
+
+        loaded = _load(job_id)
+        review = build_review(
+            loaded["job"],
+            loaded["items"],
+            loaded["allowances"],
+            loaded["rfis"],
+            loaded["claims"],
+        )
+        return TEMPLATES.TemplateResponse(
+            request,
+            "sheets.html",
+            {
+                "contractor": CONTRACTOR,
+                "disclaimer": DISCLAIMER,
+                "review": review,
+                "error": error,
+                "classes": [(key, CLASS_LABELS[key]) for key in SHEET_CLASSES if key != "unknown"],
+                "cleanup_enabled": BACKGROUND_CLEANUP,
+            },
+        )
+
+    @app.post("/jobs/{job_id}/sheets/{page_index}")
+    def save_sheet_class(job_id: str, page_index: int, sheet_class: str = Form("")):
+        from urllib.parse import quote
+
+        from adel_takeoff.sheets import SheetError, load_overrides, set_override, sheets_path
+
+        loaded = _load(job_id)
+        pdf_bytes = Path(loaded["job"]["pdf_path"]).read_bytes()
+        document = fitz.open(stream=pdf_bytes, filetype="pdf")
+        try:
+            page_count = document.page_count
+        finally:
+            document.close()
+        try:
+            set_override(sheets_path(root, job_id), page_index, sheet_class, page_count)
+        except SheetError as exc:
+            return RedirectResponse(
+                url=f"/jobs/{job_id}/sheets?error={quote(str(exc))}",
+                status_code=303,
+            )
+        overrides_result = run_takeoff(pdf_bytes, overrides=load_overrides(sheets_path(root, job_id)))
+        with session(db_path) as conn:
+            clear_takeoff(conn, job_id)
+            save_takeoff(conn, job_id, overrides_result)
+        return RedirectResponse(url=f"/jobs/{job_id}/sheets", status_code=303)
+
     @app.get("/jobs/{job_id}/zones", response_class=HTMLResponse)
     def zones_page(request: Request, job_id: str, page: int = 0, error: str = ""):
         loaded = _load(job_id)

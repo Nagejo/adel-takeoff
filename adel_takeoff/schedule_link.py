@@ -241,13 +241,16 @@ def _counts_match(count: int | None, count_text: str, plan_count: int) -> bool:
     return False
 
 
-def attach_schedules(rows: list[dict], pages: list[PageData]) -> dict:
+def attach_schedules(rows: list[dict], pages: list[PageData], overrides: dict | None = None) -> dict:
     """Copy schedule cells onto rows and build discrepancy and rollup lists.
 
     Rows are updated in place. Effective quantities are left alone.
     """
 
-    parsed = parse_schedules(pages) if pages else ParsedSchedules()
+    from adel_takeoff.sheets import pages_for_steps
+
+    schedule_pages = pages_for_steps(pages, ("fixture_schedule", "panel_schedule"), overrides) if pages else []
+    parsed = parse_schedules(schedule_pages) if schedule_pages else ParsedSchedules()
     by_index = {page.index: page for page in pages}
     known_marks = {row.mark for row in parsed.fixture_rows}
     items_by_type: dict[str, list[dict]] = defaultdict(list)

@@ -262,6 +262,7 @@ def build_workbook(job: dict, items, allowances, rfis, claims) -> bytes:
     _write_discrepancies(workbook, review["discrepancies"])
     _write_notes(workbook, review.get("notes") or [], review.get("notes_warning") or "")
     _write_zones(workbook, review.get("zones") or [], review.get("zone_rollups") or [])
+    _write_sheet_index(workbook, review.get("sheet_index") or [])
     _write_coordination(workbook, review.get("coordination") or [])
     _write_materials(workbook, review["materials"])
     _write_labor(workbook, job, review["labor"], review.get("assembly_warning") or "")
@@ -341,6 +342,36 @@ def _write_zones(workbook: Workbook, zones: list[dict], rollups: list[dict]) -> 
         for column, value in enumerate(values, start=1):
             sheet.cell(rollup_row, column, value)
         rollup_row += 1
+
+
+def _write_sheet_index(workbook: Workbook, rows: list[dict]) -> None:
+    sheet = workbook.create_sheet("Sheet Index")
+    sheet["A1"] = (
+        "Each sheet has one class from its title block and layout. "
+        "The steps are what runs for that class. "
+        "Symbol detection runs on plan sheets. Schedule parsing runs on schedule sheets. "
+        "An estimator override replaces the detected class."
+    )
+    headers = ["Page", "Sheet", "Title", "Class", "Confidence", "Reasons", "Steps", "Override"]
+    for column, header in enumerate(headers, start=1):
+        cell = sheet.cell(3, column, header)
+        cell.font = Font(bold=True)
+    if not rows:
+        sheet.cell(4, 1, "No sheets")
+        return
+    for index, row in enumerate(rows, start=4):
+        values = [
+            int(row["page_index"]) + 1,
+            row.get("sheet") or None,
+            row.get("title") or None,
+            row.get("label") or None,
+            row.get("confidence") or None,
+            "; ".join(row.get("reasons") or []) or None,
+            ", ".join(row.get("step_labels") or []) or None,
+            row.get("detected_label") if row.get("override") else None,
+        ]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(index, column, value)
 
 
 def _write_quantity_row(sheet, row_index: int, line: dict, rate_labels: dict) -> None:

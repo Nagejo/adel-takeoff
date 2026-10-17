@@ -2,7 +2,7 @@
 {% block title %}Review{% endblock %}
 {% block body %}
 <p class="nav"><a href="/jobs/{{ review.job.id }}">Job settings</a> · <a href="/jobs/{{ review.job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ review.job.id }}/scale">Scale</a> · <a href="/jobs/{{ review.job.id }}/revision">Revision</a> · <a href="/jobs/{{ review.job.id }}/search">Search</a> · <a href="/jobs/{{ review.job.id }}/symbols">Symbols</a> · <a href="/jobs/{{ review.job.id }}/export.xlsx">Download Excel quantity report</a> · <a href="/jobs/{{ review.job.id }}/export.pdf">Download marked-up PDF</a></p>
-<p class="nav"><a href="/jobs/{{ review.job.id }}/notes">Notes</a> · <a href="/jobs/{{ review.job.id }}/coordination">RFI log</a> · <a href="/jobs/{{ review.job.id }}/zones">Zones</a> · <a id="benchmark-truth" href="/jobs/{{ review.job.id }}/truth.zip">Download benchmark truth</a> · <a href="/jobs/{{ review.job.id }}/rfi.docx">Download RFI log</a></p>
+<p class="nav"><a href="/jobs/{{ review.job.id }}/notes">Notes</a> · <a href="/jobs/{{ review.job.id }}/coordination">RFI log</a> · <a href="/jobs/{{ review.job.id }}/zones">Zones</a> · <a href="/jobs/{{ review.job.id }}/sheets">Sheet index</a> · <a id="benchmark-truth" href="/jobs/{{ review.job.id }}/truth.zip">Download benchmark truth</a> · <a href="/jobs/{{ review.job.id }}/rfi.docx">Download RFI log</a></p>
 {% if review.notes_warning %}
 <p class="warning" id="notes-warning">{{ review.notes_warning }}</p>
 {% endif %}

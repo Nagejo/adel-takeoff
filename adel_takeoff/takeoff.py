@@ -119,12 +119,20 @@ def assign_item_ids(items: list[MeasuredItem]) -> None:
         item.item_id = str(number)
 
 
-def run_takeoff(pdf_bytes: bytes) -> TakeoffResult:
-    pages: list[PageData] = read_pdf(pdf_bytes)
+def run_takeoff(pdf_bytes: bytes, cleanup: bool | None = None, overrides: dict | None = None) -> TakeoffResult:
+    if cleanup is None:
+        from adel_takeoff.cleanup import BACKGROUND_CLEANUP
+
+        cleanup = BACKGROUND_CLEANUP
+    from adel_takeoff.sheets import pages_for_steps
+
+    pages: list[PageData] = read_pdf(pdf_bytes, cleanup=bool(cleanup))
     pages_by_index = {page.index: page for page in pages}
+    legend_pages = pages_for_steps(pages, ("legend",), overrides)
+    plan_pages = pages_for_steps(pages, ("symbol_detection",), overrides)
     entries = []
     template_boxes: set[tuple] = set()
-    for page in pages:
+    for page in legend_pages:
         for entry in legend_entries(page):
             entries.append(entry)
             template_boxes.add((entry.page_index, entry.bbox))
@@ -143,7 +151,7 @@ def run_takeoff(pdf_bytes: bytes) -> TakeoffResult:
     instances: list[Instance] = []
     unmatched: list[MeasuredItem] = []
     unlegended: list[tuple] = []
-    for page in pages:
+    for page in plan_pages:
         for cluster in page.clusters:
             if (page.index, cluster.bbox) in template_boxes:
                 continue

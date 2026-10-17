@@ -139,6 +139,22 @@ Then open `/jobs/<id>/zones`, save a zone, and open Review counts, the Excel dow
 
 Zones are not detected from the drawing. The estimator names them. An overlap is flagged rather than resolved. There is no routing.
 
+## Sheet index
+
+Each page is classified as a power plan, lighting plan, systems / LV plan, riser / one-line, panel schedules, fixture schedule, legend / symbols, notes / general, site, details, cover / index, or unknown. The class uses the title block (sheet number prefix and title, from PDF text or OCR) and layout cues such as a word table and a column grid. Low-confidence OCR is not applied. Every row shows its reasons and a confidence of high, medium, or low.
+
+Open the Sheet index and set a class when the detection is wrong. Saving a class recounts the job with that override. Symbol detection runs on plan sheets. Legend reading runs on legend sheets. Fixture and panel schedules run on schedule sheets. Notes, riser checks, and scale checks run on the classes that carry them. A strong heading can add a step, so a power plan that prints general notes still reads those notes.
+
+Background cleanup can leave the title-block band, borders, revision clouds, hatching, and faint linework out of symbol detection. The marked-up PDF still uses the original sheet. Cleanup is off. The shipped benchmarks do not gain precision when it is turned on, and recall does not rise, so it stays off.
+
+```bash
+python -m adel_takeoff
+```
+
+Then open `/jobs/<id>/sheets`.
+
+Sheet classes are not taken from a vendor library. There is no routing.
+
 ## Accuracy benchmark
 
 A set folder holds the drawing and the expected result:

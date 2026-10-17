@@ -345,7 +345,13 @@ def _revision_for_job(job: dict) -> dict:
 def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, claims) -> dict:
     rows = sorted((present_item(item, job) for item in items), key=_id_key)
     pages = _schedule_pages(job)
-    linked = attach_schedules(rows, pages)
+    from adel_takeoff.sheets import classify_pages, load_overrides, sheets_path
+
+    sheet_overrides: dict = {}
+    data_dir = data_dir_for_job(job)
+    if data_dir is not None and job.get("id"):
+        sheet_overrides = load_overrides(sheets_path(data_dir, str(job["id"])))
+    linked = attach_schedules(rows, pages, sheet_overrides)
     affected = {
         item_id
         for entry in linked["discrepancies"]
@@ -370,7 +376,6 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
     from adel_takeoff.zones import assign_zones, load_zones, zone_rollups, zones_path
 
     zones = []
-    data_dir = data_dir_for_job(job)
     if data_dir is not None and job.get("id"):
         zones = load_zones(zones_path(data_dir, str(job["id"])))
     assign_zones(rows, zones)
@@ -388,7 +393,7 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
     ]
     from adel_takeoff.coordination import coordination_packet
 
-    packet = coordination_packet(job, rows, pages, linked, rfis)
+    packet = coordination_packet(job, rows, pages, linked, rfis, sheet_overrides)
     return {
         "job": job,
         "rows": rows,
@@ -398,6 +403,7 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
         "labor": labor_rows(base_lines, job),
         "zones": zones,
         "zone_rollups": zone_rollups(rows),
+        "sheet_index": classify_pages(pages, sheet_overrides),
         "assembly_warning": assembly_warning(lines),
         "scales": scale_report["sheets"],
         "measurements": scale_report["measurements"],

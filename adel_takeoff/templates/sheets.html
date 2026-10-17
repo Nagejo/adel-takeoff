@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Sheet index{% endblock %}
+{% block body %}
+<p class="nav"><a href="/jobs/{{ review.job.id }}">Job settings</a> · <a href="/jobs/{{ review.job.id }}/review">Review counts</a> · <a href="/jobs/{{ review.job.id }}/export.xlsx">Download Excel</a> · <a href="/jobs/{{ review.job.id }}/export.pdf">Download marked-up PDF</a></p>
+<h1>Sheet index</h1>
+<p class="note" id="sheet-note">Each page is one class: power plan, lighting plan, systems / LV plan, riser / one-line, panel schedules, fixture schedule, legend / symbols, notes / general, site, details, cover / index, or unknown. The class uses the title block and layout cues. Each row lists why, a confidence of high, medium, or low, and the steps that run for that class. Symbol detection runs on plan sheets. Schedule parsing runs on schedule sheets.</p>
+{% if cleanup_enabled %}
+<p class="note" id="cleanup-note">Background cleanup is on. Faint linework, hatching, borders, revision clouds, and the title-block band are left out of symbol detection. Markups still use the original PDF.</p>
+{% else %}
+<p class="note" id="cleanup-note">Background cleanup is off. It stays off unless the shipped benchmarks gain precision without losing recall. Markups keep the original PDF either way.</p>
+{% endif %}
+{% if error %}<p class="warning" id="sheet-error">{{ error }}</p>{% endif %}
+<table id="sheet-index">
+  <thead>
+    <tr>
+      <th>Page</th>
+      <th>Sheet</th>
+      <th>Title</th>
+      <th>Class</th>
+      <th>Confidence</th>
+      <th>Reasons</th>
+      <th>Steps</th>
+      <th>Override</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in review.sheet_index %}
+    <tr id="sheet-{{ row.page_index }}" data-class="{{ row.sheet_class }}" data-confidence="{{ row.confidence }}">
+      <td>{{ row.page_index + 1 }}</td>
+      <td>{{ row.sheet }}</td>
+      <td>{{ row.title }}</td>
+      <td class="sheet-class">{{ row.label }}{% if row.override %} <span class="pill">override</span>{% endif %}</td>
+      <td class="sheet-confidence">{{ row.confidence }}</td>
+      <td class="sheet-reasons">{{ row.reasons | join("; ") }}</td>
+      <td class="sheet-steps">{{ row.step_labels | join(", ") }}</td>
+      <td>
+        <form method="post" action="/jobs/{{ review.job.id }}/sheets/{{ row.page_index }}">
+          <label>Class
+            <select name="sheet_class" aria-label="Class for {{ row.sheet }}">
+              <option value="">Detected {{ row.detected_label }}</option>
+              {% for key, label in classes %}
+              <option value="{{ key }}" {% if row.override == key %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <button type="submit">Save class</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8">No sheets.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

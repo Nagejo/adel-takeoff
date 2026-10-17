@@ -46,6 +46,8 @@ class Primitive:
     kind: str
     points: list[tuple[float, float]]
     bbox: tuple[float, float, float, float]
+    color: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    width: float = 1.0
 
 
 @dataclass
@@ -100,6 +102,8 @@ class PageData:
     text: str = ""
     text_source: str = "pdf"
     ocr_checks: list = field(default_factory=list)
+    vertical_lines: int = 0
+    horizontal_lines: int = 0
 
 
 _ALNUM = re.compile(r"[A-Za-z0-9]")
@@ -191,11 +195,46 @@ def _primitive_from_item(item) -> Primitive | None:
 def _drawings_to_primitives(page) -> list[Primitive]:
     primitives: list[Primitive] = []
     for drawing in page.get_drawings():
+        color = _drawing_color(drawing.get("color"))
+        try:
+            stroke = float(drawing.get("width") or 1.0)
+        except (TypeError, ValueError):
+            stroke = 1.0
         for item in drawing.get("items", []):
             primitive = _primitive_from_item(item)
-            if primitive is not None:
-                primitives.append(primitive)
+            if primitive is None:
+                continue
+            primitive.color = color
+            primitive.width = stroke
+            primitives.append(primitive)
     return primitives
+
+
+def _drawing_color(value) -> tuple[float, float, float]:
+    if not value:
+        return (0.0, 0.0, 0.0)
+    try:
+        channels = tuple(float(channel) for channel in value[:3])
+    except (TypeError, ValueError):
+        return (0.0, 0.0, 0.0)
+    if len(channels) < 3:
+        return (0.0, 0.0, 0.0)
+    return channels  # type: ignore[return-value]
+
+
+def _layout_counts(primitives: list[Primitive], width: float, height: float) -> tuple[int, int]:
+    vertical = 0
+    horizontal = 0
+    for primitive in primitives:
+        if primitive.kind != "l" or len(primitive.points) < 2:
+            continue
+        x0, y0 = primitive.points[0]
+        x1, y1 = primitive.points[1]
+        if abs(x1 - x0) <= 4 and abs(y1 - y0) >= height * 0.45:
+            vertical += 1
+        if abs(y1 - y0) <= 4 and abs(x1 - x0) >= width * 0.45:
+            horizontal += 1
+    return vertical, horizontal
 
 
 def _span(bbox: tuple[float, float, float, float]) -> float:
@@ -596,30 +635,40 @@ def _match_lines_on_page(
     return found
 
 
-def read_pdf(pdf_bytes: bytes) -> list[PageData]:
+def read_pdf(pdf_bytes: bytes, cleanup: bool = False) -> list[PageData]:
     document = fitz.open(stream=pdf_bytes, filetype="pdf")
     try:
         pages: list[PageData] = []
         for index, page in enumerate(document):
             words, text_source = words_and_source(page)
             primitives = _drawings_to_primitives(page)
+            width = float(page.rect.width)
+            height = float(page.rect.height)
+            symbol_primitives = primitives
+            if cleanup:
+                from adel_takeoff.cleanup import suppress_background
+
+                symbol_primitives = suppress_background(primitives, width, height)
             if text_source == "pdf":
                 text = page.get_text("text")
             else:
                 text = "\n".join(
                     " ".join(word.text for word in line) for line in group_lines(words)
                 )
+            vertical, horizontal = _layout_counts(primitives, width, height)
             page_data = PageData(
                 index=index,
-                width=float(page.rect.width),
-                height=float(page.rect.height),
+                width=width,
+                height=height,
                 words=words,
-                clusters=_cluster_symbols(primitives, index),
+                clusters=_cluster_symbols(symbol_primitives, index),
                 match_lines=_match_lines_on_page(index, words, _long_lines(primitives)),
                 sheet=sheet_name(words, index),
                 sheet_title=read_sheet_title(words),
                 text=text,
                 text_source=text_source,
+                vertical_lines=vertical,
+                horizontal_lines=horizontal,
             )
             pages.append(page_data)
         return pages
