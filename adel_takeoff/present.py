@@ -9,9 +9,11 @@ from adel_takeoff.assemblies import (
     apply_assemblies,
     assembly_warning,
     catalog_for_job,
+    data_dir_for_job,
     labor_rows,
     material_rows,
 )
+from adel_takeoff.revision import empty_revision, load_revision, revision_path
 from adel_takeoff.scale import report_for_job
 from adel_takeoff.classify import categorize, in_scope, scope_label
 from adel_takeoff.confidence import apply_discrepancy_cap, confidence_band
@@ -214,7 +216,8 @@ def present_item(item: dict, job: dict) -> dict:
         "count_method": count_method,
         "count_methods": count_methods,
         "detector_score": score,
-        "confidence": confidence_band(score),
+        "confidence": "check" if item.get("revision_check") else confidence_band(score),
+        "revision_check": bool(item.get("revision_check")),
         "review_status": review_status,
         "exclusion": exclusion,
         "decision_label": _decision_label(review_status, exclusion, status),
@@ -295,6 +298,13 @@ def _schedule_pages(job: dict):
     return read_pdf(path.read_bytes())
 
 
+def _revision_for_job(job: dict) -> dict:
+    data_dir = data_dir_for_job(job)
+    if data_dir is None or not job.get("id"):
+        return empty_revision()
+    return load_revision(revision_path(data_dir, job["id"]))
+
+
 def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, claims) -> dict:
     rows = sorted((present_item(item, job) for item in items), key=_id_key)
     linked = attach_schedules(rows, _schedule_pages(job))
@@ -313,6 +323,7 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
     totals["journeyman_warning"] = journeyman_warning(_decimal(job["rate_journeyman"]))
     lines = quantity_lines(rows)
     scale_report = report_for_job(job)
+    revision = _revision_for_job(job)
     unresolved = [
         row
         for row in rows
@@ -328,6 +339,7 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
         "assembly_warning": assembly_warning(lines),
         "scales": scale_report["sheets"],
         "measurements": scale_report["measurements"],
+        "revision": revision,
         "allowances": allowance_rows,
         "rfis": rfis,
         "claims": claims,

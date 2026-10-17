@@ -33,6 +33,9 @@ This is an internal tool. It is not a product for other contractors. It is not D
 - Refuse a length when the scale is missing, marked NTS, ambiguous, or the printed text and the bar disagree by more than 5 percent. The refusal says why. Raceway and conductor stay on the assembly allowance. A scale is never guessed.
 - An estimator can set a scale by picking one or by entering a known dimension between two points. That manual scale is stored in `data/scales/<job-id>.json` with who set it and when, and it overrides detection.
 - A polyline measure tool reports length in feet only on a sheet or viewport with a valid scale. Measured lengths are on the Excel Measured sheet with the sheet, the scale source, and method `measured`. They are separate from allowance lines.
+- Compare a revised drawing set with the previous one from the job's Revision page. Sheets match on sheet number. A unique printed title pairs a sheet whose number changed. Added, removed, and renumbered sheets are reported. Each matched sheet is aligned and diffed. The overlay PDF marks additions in blue, deletions in red, and clouds the change regions.
+- Takeoff counts are compared by tag, sheet, and area, with old quantity, new quantity, and delta on the Excel Revision Changes sheet. Fixture and panel schedule row changes are on that sheet too. An item that clearly persists keeps its old item id. Review decisions carry forward only for unchanged items. Changed items go back to check, including when the detector recorded no score. That check is a revision flag.
+- If alignment fails or agreement is below the cutoff in `adel_takeoff/constants.py`, that sheet is refused. The refusal says why. No colored overlay and no position-based count diff are produced for it.
 
 The legend is the stack of labeled symbols under the heading `SYMBOL LEGEND`. Rows more than 72 points apart are not treated as the same legend. Match lines need a shared key and one overlap depth, for example `MATCH LINE ML-A OVERLAP 120`.
 
@@ -42,8 +45,9 @@ The legend is the stack of labeled symbols under the heading `SYMBOL LEGEND`. Ro
 - Invented or eyeballed counts, guessed panel or circuit links, a price book, or default labor hours.
 - A text-tag detector. The count method can record `text tag` when a future detector emits one. This version does not.
 - Replacing an assembly allowance with a measured length. A measurement is its own line. It does not become the raceway or conductor quantity.
-- Conduit routing and home runs. The measure tool is a polyline length only.
-- Revision comparison.
+- Conduit routing and home runs. The measure tool is a polyline length only. A revision diff does not create either one.
+- A rotated sheet, or any alignment that does not settle inside the search window. Those sheets are refused.
+- Replacing the previous PDF in place without an uploaded revision. The Revision page is what stores the compare.
 - A schedule value that the drawing did not print. A blank cell stays blank.
 - A confidence flag with no detector score. Blank means no score. It is not filled in.
 - A default markup.
@@ -64,7 +68,9 @@ python -m adel_takeoff
 
 Open http://127.0.0.1:8000
 
-Jobs are stored under `./data`. Review decisions are `data/reviews/<job-id>.json`. Assembly overrides are `data/assemblies/<job-id>.json`. The starter assemblies are `assemblies/starter.json`. Manual scales and measured lengths are `data/scales/<job-id>.json`.
+Jobs are stored under `./data`. Review decisions are `data/reviews/<job-id>.json`. Assembly overrides are `data/assemblies/<job-id>.json`. The starter assemblies are `assemblies/starter.json`. Manual scales and measured lengths are `data/scales/<job-id>.json`. A revision compare is `data/revisions/<job-id>.json`, and the overlay PDF is `data/revisions/<job-id>-overlay.pdf`.
+
+To compare a revision, upload the previous set first, open that job, choose Revision, and upload the revised PDF. The job then becomes the revised set. Unchanged review decisions stay. Changed marks return to check. Download Excel for the Revision Changes sheet, or open the overlay PDF from the revision page.
 
 The same actions are available from the command line:
 
