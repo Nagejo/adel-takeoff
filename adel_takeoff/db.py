@@ -46,6 +46,13 @@ CREATE TABLE IF NOT EXISTS items (
     material_unit_cost TEXT,
     labor_hours TEXT,
     labor_rate_key TEXT NOT NULL DEFAULT 'journeyman',
+    method TEXT NOT NULL DEFAULT 'legend_match',
+    match_score TEXT,
+    review_status TEXT NOT NULL DEFAULT 'accepted',
+    exclusion TEXT NOT NULL DEFAULT '',
+    corrected_label TEXT,
+    corrected_panel TEXT,
+    corrected_circuit TEXT,
     FOREIGN KEY (job_id) REFERENCES jobs(id)
 );
 CREATE TABLE IF NOT EXISTS allowances (
@@ -80,12 +87,31 @@ CREATE TABLE IF NOT EXISTS code_claims (
 """
 
 
+_ITEM_COLUMNS = {
+    "method": "TEXT NOT NULL DEFAULT 'legend_match'",
+    "match_score": "TEXT",
+    "review_status": "TEXT NOT NULL DEFAULT 'accepted'",
+    "exclusion": "TEXT NOT NULL DEFAULT ''",
+    "corrected_label": "TEXT",
+    "corrected_panel": "TEXT",
+    "corrected_circuit": "TEXT",
+}
+
+
+def _ensure_item_columns(conn: sqlite3.Connection) -> None:
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(items)")}
+    for name, column_type in _ITEM_COLUMNS.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE items ADD COLUMN {name} {column_type}")
+
+
 def connect(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
+    _ensure_item_columns(conn)
     return conn
 
 
@@ -152,11 +178,11 @@ def save_takeoff(conn, job_id: str, result) -> None:
             INSERT INTO items (
                 id, job_id, label, category, measurement, measured_quantity,
                 sheets_json, panel, circuit, link_flag, deduped, occurrences_json,
-                labor_rate_key
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'journeyman')
+                labor_rate_key, method, match_score, review_status, exclusion
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'journeyman', ?, ?, 'accepted', '')
             """,
             (
-                uuid4().hex[:12],
+                item.item_id,
                 job_id,
                 item.label,
                 item.category,
@@ -168,6 +194,8 @@ def save_takeoff(conn, job_id: str, result) -> None:
                 item.link_flag,
                 1 if item.deduped else 0,
                 json.dumps([occurrence.as_dict() for occurrence in item.occurrences]),
+                item.method,
+                score_text(item.match_score),
             ),
         )
     for rfi in result.rfis:
@@ -304,3 +332,66 @@ def money_text(value: Decimal | None) -> str | None:
     if value is None:
         return None
     return format(value, "f")
+
+
+def score_text(value: float | None) -> str | None:
+    if value is None:
+        return None
+    return format(Decimal(str(value)), "f")
+
+
+def update_item_review(conn, job_id: str, item_id: str, decision: dict) -> None:
+    conn.execute(
+        """
+        UPDATE items SET
+            review_status = ?,
+            exclusion = ?,
+            corrected_label = ?,
+            corrected_panel = ?,
+            corrected_circuit = ?
+        WHERE id = ? AND job_id = ?
+        """,
+        (
+            decision["review_status"],
+            decision["exclusion"],
+            decision.get("corrected_label"),
+            decision.get("corrected_panel"),
+            decision.get("corrected_circuit"),
+            item_id,
+            job_id,
+        ),
+    )
+
+
+def insert_manual_item(conn, job_id: str, item: dict) -> None:
+    existing = conn.execute(
+        "SELECT id FROM items WHERE id = ? AND job_id = ?",
+        (item["id"], job_id),
+    ).fetchone()
+    if existing is not None:
+        return
+    conn.execute(
+        """
+        INSERT INTO items (
+            id, job_id, label, category, measurement, measured_quantity,
+            sheets_json, panel, circuit, link_flag, deduped, occurrences_json,
+            labor_rate_key, method, match_score, review_status, exclusion
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'journeyman', ?, NULL, ?, ?)
+        """,
+        (
+            item["id"],
+            job_id,
+            item["label"],
+            item["category"],
+            item["measurement"],
+            item["measured_quantity"],
+            json.dumps(item["sheets"]),
+            item.get("panel") or "",
+            item.get("circuit") or "",
+            item.get("link_flag") or "",
+            json.dumps(item["occurrences"]),
+            item.get("method") or "manual_add",
+            item.get("review_status") or "accepted",
+            item.get("exclusion") or "",
+        ),
+    )
