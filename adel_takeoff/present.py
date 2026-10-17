@@ -12,6 +12,7 @@ from adel_takeoff.assemblies import (
     labor_rows,
     material_rows,
 )
+from adel_takeoff.scale import report_for_job
 from adel_takeoff.classify import categorize, in_scope, scope_label
 from adel_takeoff.confidence import apply_discrepancy_cap, confidence_band
 from adel_takeoff.constants import DISCREPANCY_CONFIDENCE_CAP
@@ -311,6 +312,7 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
     totals = review_totals(rows, allowance_rows, job.get("markup"))
     totals["journeyman_warning"] = journeyman_warning(_decimal(job["rate_journeyman"]))
     lines = quantity_lines(rows)
+    scale_report = report_for_job(job)
     unresolved = [
         row
         for row in rows
@@ -324,6 +326,8 @@ def build_review(job: dict, items: list[dict], allowances: list[dict], rfis, cla
         "materials": material_rows(lines, catalog),
         "labor": labor_rows(lines, job),
         "assembly_warning": assembly_warning(lines),
+        "scales": scale_report["sheets"],
+        "measurements": scale_report["measurements"],
         "allowances": allowance_rows,
         "rfis": rfis,
         "claims": claims,

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Scale{% endblock %}
+{% block body %}
+<p class="nav"><a href="/jobs/{{ job.id }}">Job settings</a> · <a href="/jobs/{{ job.id }}/review">Review counts</a> · <a href="/jobs/{{ job.id }}/assemblies">Assemblies</a> · <a href="/jobs/{{ job.id }}/export.xlsx">Download Excel</a></p>
+<h1>Scale</h1>
+<p class="note">A length is measured only where a scale was printed or set by hand. A missing scale, NTS, more than one scale that is not tied to a viewport, or a printed scale that disagrees with the graphic bar is refused. Raceway and conductor stay on the assembly allowance. This does not route conduit or create home runs.</p>
+<p class="note">Manual scales are stored in <span id="scale-path">{{ scale_path }}</span> with who set them and when.</p>
+{% if error %}
+<p class="error" id="form-error">{{ error }}</p>
+{% endif %}
+{% for page in sheets %}
+<section class="scale-card" id="scale-page-{{ page.page_index }}">
+  <h2>{{ page.sheet }}{% if page.sheet_title %} — {{ page.sheet_title }}{% endif %}</h2>
+  {% if page.status in ["valid", "manual", "regional"] %}
+  <p id="scale-detected-{{ page.page_index }}">
+    {% for region in page.regions %}
+      {% if region.status in ["valid", "manual"] %}
+      Scale {{ region.label }}. Source: {{ region.source }}.
+      {% if region.read_from %}Read from
+        {% for item in region.read_from %}{{ item.kind }}{% if item.bbox %} {{ "%.2f"|format(item.bbox[0]) }},{{ "%.2f"|format(item.bbox[1]) }} to {{ "%.2f"|format(item.bbox[2]) }},{{ "%.2f"|format(item.bbox[3]) }}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}.
+      {% endif %}
+      {% if region.viewport %}Applies to viewport {{ "%.2f"|format(region.viewport[0]) }},{{ "%.2f"|format(region.viewport[1]) }} to {{ "%.2f"|format(region.viewport[2]) }},{{ "%.2f"|format(region.viewport[3]) }}.{% else %}Applies to the sheet.{% endif %}
+      {% if region.set_by %}Set by {{ region.set_by }} at {{ region.set_at }}.{% endif %}
+      {% endif %}
+    {% endfor %}
+  </p>
+  {% endif %}
+  {% for region in page.regions %}
+    {% if region.status not in ["valid", "manual"] %}
+    <p class="warning" id="scale-refused-{{ page.page_index }}">{{ region.reason }}
+      {% if region.read_from %}Read from
+        {% for item in region.read_from %}{{ item.kind }}{% if item.bbox %} {{ "%.2f"|format(item.bbox[0]) }},{{ "%.2f"|format(item.bbox[1]) }} to {{ "%.2f"|format(item.bbox[2]) }},{{ "%.2f"|format(item.bbox[3]) }}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}.
+      {% endif %}
+    </p>
+    {% endif %}
+  {% endfor %}
+  {% if page.overridden %}
+  <p class="note">Detected scale, overridden:</p>
+  <ul>
+    {% for region in page.detected %}
+    <li>{{ region.status }}{% if region.label %} {{ region.label }}{% endif %}{% if region.source %} from {{ region.source }}{% endif %}{% if region.reason %} — {{ region.reason }}{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <form method="post" action="/jobs/{{ job.id }}/scales">
+    <input type="hidden" name="page_index" value="{{ page.page_index }}">
+    <label>Set by <input name="set_by" type="text" value="estimator" required></label>
+    <label class="check"><input type="radio" name="mode" value="picked" checked> Pick a scale</label>
+    <select name="picked">
+      {% for scale in picked_scales %}
+      <option value="{{ scale }}">{{ scale }}</option>
+      {% endfor %}
+    </select>
+    <label class="check"><input type="radio" name="mode" value="dimension"> Known dimension between two points</label>
+    <div class="rate-line">
+      <label>x1 <input name="x1" type="text"></label>
+      <label>y1 <input name="y1" type="text"></label>
+      <label>x2 <input name="x2" type="text"></label>
+      <label>y2 <input name="y2" type="text"></label>
+      <label>Feet <input name="known_feet" type="text"></label>
+    </div>
+    <button type="submit">Save manual scale</button>
+    <button type="submit" name="clear" value="yes">Use the detected scale</button>
+  </form>
+  <form method="post" action="/jobs/{{ job.id }}/measurements">
+    <input type="hidden" name="page_index" value="{{ page.page_index }}">
+    <label>Polyline points <textarea name="points" placeholder="100,400; 172,400"></textarea></label>
+    <label>Set by <input name="set_by" type="text" value="estimator" required></label>
+    <button type="submit">Measure length</button>
+  </form>
+</section>
+{% endfor %}
+{% if measurements %}
+<h2>Measured lengths</h2>
+<ul id="measured-lengths">
+  {% for item in measurements %}
+  <li>{{ item.sheet }}: {{ item.length_ft }} ft, source {{ item.scale_source }}, method {{ item.method }}, set by {{ item.set_by }} at {{ item.set_at }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}
