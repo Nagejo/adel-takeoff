@@ -15,11 +15,14 @@
   <div><dt>Marked-up total</dt><dd id="marked-up-total">{% if review.totals.marked_up_total is none %}not applied{% else %}{{ review.totals.marked_up_total }}{% endif %}</dd></div>
 </dl>
 <p class="note">Material unit cost and labor hours stay blank until you enter them. Direct cost uses only those entries. Blank fields contribute nothing.</p>
+<p class="note" id="confidence-note">Confidence is high, check, or low only when the detector recorded a score. The cutoffs live in config. A blank confidence means there is no score. A manual add has no score. Counts are the marks that were detected or that you added, after review.</p>
 
 <h2>Detected counts</h2>
+<div class="table-scroll">
 <table>
   <thead>
     <tr>
+      <th>ID</th>
       <th>Item</th>
       <th>Category</th>
       <th>Scope</th>
@@ -27,16 +30,21 @@
       <th>Correction</th>
       <th>Effective</th>
       <th>Sheets</th>
+      <th>Location</th>
+      <th>How counted</th>
+      <th>Confidence</th>
       <th>Panel</th>
       <th>Circuit</th>
       <th>Flag</th>
+      <th>Review</th>
       <th>Cost</th>
     </tr>
   </thead>
   <tbody>
     {% for row in review.rows %}
     <tr id="item-{{ row.id }}" class="item status-{{ row.status }}{% if row.deduped %} deduped{% endif %}" data-label="{{ row.label }}" data-category="{{ row.category }}">
-      <td class="label">{{ row.label }}</td>
+      <td class="item-id">{{ row.id }}</td>
+      <td class="label">{{ row.label }}{% if row.label != row.detected_label %} <span class="pill">detected {{ row.detected_label }}</span>{% endif %}</td>
       <td class="category">{{ row.category }}</td>
       <td class="scope">{{ row.scope }}</td>
       <td class="measured">{% if row.measured is none %}{% else %}{{ row.measured }}{% endif %}</td>
@@ -67,11 +75,90 @@
       </td>
       <td class="effective">{% if row.effective is none %}{% else %}{{ row.effective }}{% endif %}</td>
       <td class="sheets">{{ row.sheets | join(", ") }}{% if row.deduped %} <span class="pill">counted once</span>{% endif %}</td>
+      <td class="location">{{ row.location }}</td>
+      <td class="how-counted">{{ row.how_counted }}</td>
+      <td class="confidence">{{ row.confidence }}</td>
       <td class="panel">{{ row.panel }}</td>
       <td class="circuit">{{ row.circuit }}</td>
       <td class="link-flag">{{ row.link_flag }}</td>
+      <td class="review-decision">
+        <form method="post" action="/jobs/{{ review.job.id }}/items/{{ row.id }}/review">
+          <label>Decision
+            <select name="action">
+              <option value="accept" {% if row.review_status == 'accepted' and not row.exclusion %}selected{% endif %}>Accept</option>
+              <option value="reject" {% if row.review_status == 'rejected' %}selected{% endif %}>Reject</option>
+              <option value="correct" {% if row.review_status == 'corrected' %}selected{% endif %}>Correct type/tag</option>
+              <option value="existing_to_remain" {% if row.exclusion == 'existing_to_remain' %}selected{% endif %}>Existing to remain</option>
+              <option value="nic" {% if row.exclusion == 'nic' %}selected{% endif %}>NIC</option>
+              <option value="by_others" {% if row.exclusion == 'by_others' %}selected{% endif %}>By others</option>
+            </select>
+          </label>
+          <label>Type
+            <input name="label" type="text" value="{{ row.label }}">
+          </label>
+          <label>Panel
+            <input name="panel" type="text" value="{{ row.panel }}">
+          </label>
+          <label>Circuit
+            <input name="circuit" type="text" value="{{ row.circuit }}">
+          </label>
+          <button type="submit">Save review</button>
+        </form>
+        <p class="note review-state">{{ row.decision_label }}</p>
+      </td>
       <td class="direct">{% if row.direct_cost is none %}{% else %}{{ row.direct_cost }}{% endif %}</td>
     </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>Add a missed item</h2>
+<p class="note">One location is one item. The sheet name is read from that page. A manual add has no detector score.</p>
+<form id="add-missed-item" method="post" action="/jobs/{{ review.job.id }}/items" class="add-form">
+  <label>Sheet
+    <select name="page_index">
+      {% for sheet in sheets %}
+      <option value="{{ sheet.page_index }}">{{ sheet.sheet }}{% if sheet.sheet_title %} — {{ sheet.sheet_title }}{% endif %} (PDF page {{ sheet.page_index + 1 }})</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>X <input name="x" type="text" inputmode="decimal" required></label>
+  <label>Y <input name="y" type="text" inputmode="decimal" required></label>
+  <label>Type <input name="label" type="text" required></label>
+  <label>Panel <input name="panel" type="text"></label>
+  <label>Circuit <input name="circuit" type="text"></label>
+  <button type="submit">Add missed item</button>
+</form>
+
+<h2>Excluded from the count</h2>
+<table id="excluded-items">
+  <thead>
+    <tr>
+      <th>Item ID</th>
+      <th>Item</th>
+      <th>Sheet number</th>
+      <th>Sheet title</th>
+      <th>Location</th>
+      <th>Reason</th>
+      <th>How counted</th>
+      <th>Confidence</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for line in review.excluded %}
+    <tr id="excluded-{{ line.item_ids | join('-') }}" class="excluded-row">
+      <td>{{ line.item_ids | join(", ") }}</td>
+      <td>{{ line.label }}</td>
+      <td>{{ line.sheet_number }}</td>
+      <td>{{ line.sheet_title }}</td>
+      <td>{{ line.location }}</td>
+      <td class="excluded-reason">{{ line.excluded_reason }}</td>
+      <td>{{ line.how_counted }}</td>
+      <td>{{ line.confidence }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8">None</td></tr>
     {% endfor %}
   </tbody>
 </table>

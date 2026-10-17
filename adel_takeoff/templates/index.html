@@ -2,7 +2,7 @@
 {% block title %}Upload{% endblock %}
 {% block body %}
 <h1>Upload a drawing set</h1>
-<p>Upload a multi-page PDF. The takeoff reads the symbol legend, counts power devices and lighting fixtures, and keeps a device once where sheets overlap.</p>
+<p>Upload a multi-page PDF. The takeoff reads the symbol legend, counts power devices and lighting fixtures, and keeps a device once where sheets overlap. Review then accepts, rejects, corrects, or excludes each mark before export.</p>
 <form action="/jobs" method="post" enctype="multipart/form-data">
   <label for="pdf">PDF drawing set</label>
   <input id="pdf" name="pdf" type="file" accept="application/pdf,.pdf" required>

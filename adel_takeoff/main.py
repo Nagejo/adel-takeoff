@@ -40,43 +40,125 @@ from adel_takeoff.db import (
 )
 from adel_takeoff.export_excel import build_workbook
 from adel_takeoff.export_pdf import build_markup_pdf
+from adel_takeoff.extract import page_words, read_sheet_title, sheet_name
 from adel_takeoff.present import build_review
+from adel_takeoff.review_store import (
+    REVIEW_ACTIONS,
+    ReviewError,
+    add_missed_item,
+    apply_decision,
+    empty_document,
+    load_document,
+    overlay_items,
+    review_path,
+    save_document,
+)
 from adel_takeoff.takeoff import run_takeoff
 
 PACKAGE = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(PACKAGE / "templates"))
 
 
+def data_root(data_dir: Path | None = None) -> Path:
+    if data_dir is not None:
+        return Path(data_dir)
+    return Path(os.environ.get("ADEL_DATA_DIR", "data"))
+
+
+def db_path_for(data_dir: Path) -> Path:
+    return Path(data_dir) / "jobs.sqlite"
+
+
+def default_rates() -> dict:
+    return {
+        "journeyman": JOURNEYMAN_DEFAULT,
+        "foreman": FOREMAN_DEFAULT,
+        "pm": PM_DEFAULT,
+        "apprentice": APPRENTICE_DEFAULT,
+    }
+
+
+def ingest_pdf(data_dir: Path, filename: str, payload: bytes) -> str:
+    if not payload:
+        raise ValueError("Upload a PDF drawing set")
+    try:
+        document = fitz.open(stream=payload, filetype="pdf")
+        document.close()
+    except Exception as exc:
+        raise ValueError("Upload a PDF drawing set") from exc
+    result = run_takeoff(payload)
+    pdf_dir = Path(data_dir) / "pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    edition = edition_for(None)
+    name = Path(filename or "drawing.pdf").name
+    with session(db_path_for(data_dir)) as conn:
+        job_id = create_job(
+            conn,
+            name=name,
+            pdf_path="",
+            rates=default_rates(),
+            edition={"fbc": edition.fbc, "nec": edition.nec, "basis": edition.basis},
+        )
+        path = pdf_dir / f"{job_id}.pdf"
+        path.write_bytes(payload)
+        conn.execute("UPDATE jobs SET pdf_path = ? WHERE id = ?", (str(path), job_id))
+        save_takeoff(conn, job_id, result)
+    save_document(review_path(data_dir, job_id), empty_document())
+    return job_id
+
+
+def load_job(data_dir: Path, job_id: str) -> dict | None:
+    with session(db_path_for(data_dir)) as conn:
+        job = get_job(conn, job_id)
+        if job is None:
+            return None
+        items = list_items(conn, job_id)
+        allowances = list_allowances(conn, job_id)
+        rfis = list_rfis(conn, job_id)
+        claims = list_claims(conn, job_id)
+    document = load_document(review_path(data_dir, job_id))
+    return {
+        "job": job,
+        "items": overlay_items(items, document),
+        "allowances": allowances,
+        "rfis": rfis,
+        "claims": claims,
+    }
+
+
+def sheet_choices(pdf_bytes: bytes) -> list[dict]:
+    document = fitz.open(stream=pdf_bytes, filetype="pdf")
+    try:
+        choices = []
+        for index, page in enumerate(document):
+            words = page_words(page)
+            choices.append(
+                {
+                    "page_index": index,
+                    "sheet": sheet_name(words, index),
+                    "sheet_title": read_sheet_title(words),
+                    "width": float(page.rect.width),
+                    "height": float(page.rect.height),
+                }
+            )
+        return choices
+    finally:
+        document.close()
+
+
 def create_app(data_dir: Path | None = None) -> FastAPI:
-    root = Path(data_dir) if data_dir is not None else Path(os.environ.get("ADEL_DATA_DIR", "data"))
-    db_path = root / "jobs.sqlite"
-    pdf_dir = root / "pdfs"
+    root = data_root(data_dir)
+    db_path = db_path_for(root)
     app = FastAPI(title="Adel Electric quantity takeoff")
     app.mount("/static", StaticFiles(directory=str(PACKAGE / "static")), name="static")
     app.state.data_dir = root
     app.state.db_path = db_path
-    app.state.pdf_dir = pdf_dir
-
-    def _rates() -> dict:
-        return {
-            "journeyman": JOURNEYMAN_DEFAULT,
-            "foreman": FOREMAN_DEFAULT,
-            "pm": PM_DEFAULT,
-            "apprentice": APPRENTICE_DEFAULT,
-        }
 
     def _load(job_id: str) -> dict:
-        with session(db_path) as conn:
-            job = get_job(conn, job_id)
-            if job is None:
-                raise HTTPException(status_code=404, detail="Job not found")
-            return {
-                "job": job,
-                "items": list_items(conn, job_id),
-                "allowances": list_allowances(conn, job_id),
-                "rfis": list_rfis(conn, job_id),
-                "claims": list_claims(conn, job_id),
-            }
+        loaded = load_job(root, job_id)
+        if loaded is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return loaded
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request):
@@ -96,22 +178,10 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
             document.close()
         except Exception as exc:
             raise HTTPException(status_code=400, detail="Upload a PDF drawing set") from exc
-        result = run_takeoff(payload)
-        pdf_dir.mkdir(parents=True, exist_ok=True)
-        name = Path(pdf.filename or "drawing.pdf").name
-        edition = edition_for(None)
-        with session(db_path) as conn:
-            job_id = create_job(
-                conn,
-                name=name,
-                pdf_path="",
-                rates=_rates(),
-                edition={"fbc": edition.fbc, "nec": edition.nec, "basis": edition.basis},
-            )
-            path = pdf_dir / f"{job_id}.pdf"
-            path.write_bytes(payload)
-            conn.execute("UPDATE jobs SET pdf_path = ? WHERE id = ?", (str(path), job_id))
-            save_takeoff(conn, job_id, result)
+        try:
+            job_id = ingest_pdf(root, pdf.filename or "drawing.pdf", payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         return RedirectResponse(url=f"/jobs/{job_id}", status_code=303)
 
     @app.get("/jobs/{job_id}", response_class=HTMLResponse)
@@ -206,6 +276,7 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
             loaded["rfis"],
             loaded["claims"],
         )
+        pdf_path = Path(loaded["job"]["pdf_path"])
         return TEMPLATES.TemplateResponse(
             request,
             "review.html",
@@ -214,6 +285,8 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
                 "disclaimer": DISCLAIMER,
                 "review": review,
                 "labor_rates": LABOR_RATES,
+                "sheets": sheet_choices(pdf_path.read_bytes()),
+                "review_actions": REVIEW_ACTIONS,
             },
         )
 
@@ -249,6 +322,57 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
                     "labor_rate_key": labor_rate_key,
                 },
             )
+        return RedirectResponse(url=f"/jobs/{job_id}/review", status_code=303)
+
+    @app.post("/jobs/{job_id}/items/{item_id}/review")
+    def review_item(
+        job_id: str,
+        item_id: str,
+        action: str = Form(...),
+        label: str = Form(""),
+        panel: str = Form(""),
+        circuit: str = Form(""),
+    ):
+        _load(job_id)
+        try:
+            with session(db_path) as conn:
+                apply_decision(conn, root, job_id, item_id, action, label, panel, circuit)
+        except ReviewError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        return RedirectResponse(url=f"/jobs/{job_id}/review", status_code=303)
+
+    @app.post("/jobs/{job_id}/items")
+    def add_item(
+        job_id: str,
+        page_index: str = Form(...),
+        x: str = Form(...),
+        y: str = Form(...),
+        label: str = Form(""),
+        panel: str = Form(""),
+        circuit: str = Form(""),
+    ):
+        loaded = _load(job_id)
+        try:
+            parsed_page = int(page_index)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="PDF page must be a whole number.") from exc
+        pdf_bytes = Path(loaded["job"]["pdf_path"]).read_bytes()
+        try:
+            with session(db_path) as conn:
+                add_missed_item(
+                    conn,
+                    root,
+                    job_id,
+                    pdf_bytes=pdf_bytes,
+                    page_index=parsed_page,
+                    x=x,
+                    y=y,
+                    label=label,
+                    panel=panel,
+                    circuit=circuit,
+                )
+        except ReviewError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
         return RedirectResponse(url=f"/jobs/{job_id}/review", status_code=303)
 
     @app.post("/jobs/{job_id}/allowances")

@@ -89,6 +89,7 @@ class PageData:
     clusters: list[Cluster] = field(default_factory=list)
     match_lines: list[MatchLine] = field(default_factory=list)
     sheet: str = ""
+    sheet_title: str = ""
     text: str = ""
 
 
@@ -288,6 +289,25 @@ def sheet_name(words: list[Word], page_index: int) -> str:
     return f"Page {page_index + 1}"
 
 
+def read_sheet_title(words: list[Word]) -> str:
+    """Return a sheet title only when the drawing prints one.
+
+    A line with the word TITLE contributes the words that follow it.
+    Sheets with no title text stay blank.
+    """
+
+    for line in group_lines(words):
+        texts = [word.text for word in line]
+        upper = [text.upper() for text in texts]
+        if "TITLE" not in upper:
+            continue
+        rest = texts[upper.index("TITLE") + 1 :]
+        title = " ".join(rest).strip(" :-")
+        if title:
+            return title
+    return ""
+
+
 def _phrase_word(line: list[Word], phrase: tuple[str, ...]) -> int | None:
     texts = [word.text.upper() for word in line]
     size = len(phrase)
@@ -457,6 +477,7 @@ def read_pdf(pdf_bytes: bytes) -> list[PageData]:
                 clusters=_cluster_symbols(primitives, index),
                 match_lines=_match_lines_on_page(index, words, _long_lines(primitives)),
                 sheet=sheet_name(words, index),
+                sheet_title=read_sheet_title(words),
                 text=page.get_text("text"),
             )
             pages.append(page_data)

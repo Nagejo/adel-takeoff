@@ -84,8 +84,10 @@ def build_sample_pdf() -> bytes:
 
     sheet_e1 = document.new_page(width=900, height=792)
     _text(sheet_e1, 72, 36, "SHEET E1", size=12)
+    _text(sheet_e1, 220, 36, "TITLE FIRST FLOOR POWER", size=12)
     draw_duplex(sheet_e1, 150, 160)
     _text(sheet_e1, 176, 163, "LP1-12")
+    _text(sheet_e1, 176, 145, "GRID B-4")
     draw_duplex(sheet_e1, 150, 250)
     _text(sheet_e1, 176, 253, "SEE NOTE")
     draw_recessed(sheet_e1, 150, 340)
@@ -106,6 +108,7 @@ def build_sample_pdf() -> bytes:
 
     sheet_e2 = document.new_page(width=612, height=792)
     _text(sheet_e2, 72, 36, "SHEET E2", size=12)
+    _text(sheet_e2, 220, 36, "TITLE FIRST FLOOR LIGHTING", size=12)
     _match_line(sheet_e2, E2_MATCH_X)
     draw_duplex(sheet_e2, E2_MATCH_X + OVERLAP_INTO, OVERLAP_Y)
     draw_recessed(sheet_e2, 300, 200)

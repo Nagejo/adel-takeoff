@@ -1,8 +1,10 @@
 """Measure devices from a drawing set.
 
 The count path reads the legend, matches geometry, stitches overlap, and
-reads panel and circuit text. It does not import the routing package and
-it does not call a conduit router.
+reads panel and circuit text. Each kept mark gets a stable id. An exact
+legend match records the detector's equality score. A mark that does not
+match records no score. This module does not import the routing package
+and it does not call a conduit router.
 """
 
 from __future__ import annotations
@@ -11,8 +13,9 @@ from dataclasses import dataclass, field
 
 from adel_takeoff.classify import categorize
 from adel_takeoff.code_notes import CodeClaim, Rfi, analyze_drawing_text
+from adel_takeoff.constants import EXACT_MATCH_SCORE
 from adel_takeoff.extract import PageData, legend_entries, read_pdf
-from adel_takeoff.links import link_for_cluster
+from adel_takeoff.links import grid_for_cluster, link_for_cluster
 from adel_takeoff.overlap import Instance, merged_link, stitch
 
 
@@ -20,19 +23,23 @@ from adel_takeoff.overlap import Instance, merged_link, stitch
 class Occurrence:
     page_index: int
     sheet: str
+    sheet_title: str
     x0: float
     y0: float
     x1: float
     y1: float
+    grid: str = ""
 
     def as_dict(self) -> dict:
         return {
             "page_index": self.page_index,
             "sheet": self.sheet,
+            "sheet_title": self.sheet_title,
             "x0": self.x0,
             "y0": self.y0,
             "x1": self.x1,
             "y1": self.y1,
+            "grid": self.grid,
         }
 
 
@@ -48,6 +55,9 @@ class MeasuredItem:
     link_flag: str
     deduped: bool
     occurrences: list[Occurrence] = field(default_factory=list)
+    method: str = "legend_match"
+    match_score: float | None = None
+    item_id: str = ""
 
 
 @dataclass
@@ -57,26 +67,61 @@ class TakeoffResult:
     code_claims: list[CodeClaim]
 
 
-def _unmatched_item(cluster, sheet: str, reason: str) -> MeasuredItem:
+def _occurrence(cluster, page: PageData) -> Occurrence:
     x0, y0, x1, y1 = cluster.bbox
+    return Occurrence(
+        page_index=cluster.page_index,
+        sheet=page.sheet,
+        sheet_title=page.sheet_title,
+        x0=x0,
+        y0=y0,
+        x1=x1,
+        y1=y1,
+        grid=grid_for_cluster(cluster, page.words),
+    )
+
+
+def _unmatched_item(cluster, page: PageData, reason: str) -> MeasuredItem:
     return MeasuredItem(
         label="Unmatched mark",
         category="unmatched",
         measurement="unmatched",
         measured_quantity=None,
-        sheets=[sheet],
+        sheets=[page.sheet],
         panel="",
         circuit="",
         link_flag=reason,
         deduped=False,
-        occurrences=[
-            Occurrence(cluster.page_index, sheet, x0, y0, x1, y1)
-        ],
+        occurrences=[_occurrence(cluster, page)],
+        method="unmatched",
+        match_score=None,
     )
+
+
+def assign_item_ids(items: list[MeasuredItem]) -> None:
+    """Number marks in sheet order. The same geometry keeps the same id."""
+
+    def sort_key(pair: tuple[int, MeasuredItem]) -> tuple:
+        index, item = pair
+        if item.occurrences:
+            occurrence = item.occurrences[0]
+            return (
+                occurrence.page_index,
+                round(occurrence.y0, 2),
+                round(occurrence.x0, 2),
+                item.label,
+                index,
+            )
+        return (9999, 0, 0, item.label, index)
+
+    ordered = sorted(enumerate(items), key=sort_key)
+    for number, (_index, item) in enumerate(ordered, start=1):
+        item.item_id = str(number)
 
 
 def run_takeoff(pdf_bytes: bytes) -> TakeoffResult:
     pages: list[PageData] = read_pdf(pdf_bytes)
+    pages_by_index = {page.index: page for page in pages}
     entries = []
     template_boxes: set[tuple] = set()
     for page in pages:
@@ -105,7 +150,7 @@ def run_takeoff(pdf_bytes: bytes) -> TakeoffResult:
                 unmatched.append(
                     _unmatched_item(
                         cluster,
-                        page.sheet,
+                        page,
                         "legend geometry is ambiguous; not counted",
                     )
                 )
@@ -115,7 +160,7 @@ def run_takeoff(pdf_bytes: bytes) -> TakeoffResult:
                 unmatched.append(
                     _unmatched_item(
                         cluster,
-                        page.sheet,
+                        page,
                         "unmatched geometry; not counted",
                     )
                 )
@@ -136,19 +181,10 @@ def run_takeoff(pdf_bytes: bytes) -> TakeoffResult:
         if entry is None:
             continue
         link = merged_link(device)
-        occurrences = []
-        for occurrence in device.occurrences:
-            x0, y0, x1, y1 = occurrence.cluster.bbox
-            occurrences.append(
-                Occurrence(
-                    occurrence.cluster.page_index,
-                    occurrence.sheet,
-                    x0,
-                    y0,
-                    x1,
-                    y1,
-                )
-            )
+        occurrences = [
+            _occurrence(occurrence.cluster, pages_by_index[occurrence.cluster.page_index])
+            for occurrence in device.occurrences
+        ]
         items.append(
             MeasuredItem(
                 label=entry.label,
@@ -161,9 +197,12 @@ def run_takeoff(pdf_bytes: bytes) -> TakeoffResult:
                 link_flag=link.flag,
                 deduped=device.deduped,
                 occurrences=occurrences,
+                method="legend_match",
+                match_score=EXACT_MATCH_SCORE,
             )
         )
     items.extend(unmatched)
+    assign_item_ids(items)
 
     drawing_text = "\n".join(page.text for page in pages)
     rfis, claims = analyze_drawing_text(drawing_text)

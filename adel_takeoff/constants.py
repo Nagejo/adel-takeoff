@@ -44,5 +44,15 @@ LEGEND_ROW_GAP_PT = 72.0
 MAX_SYMBOL_PT = 42.0
 MIN_SYMBOL_PT = 4.0
 
+# Exact legend fingerprint equality. The detector records this when every
+# geometry component matches. It is not a probability, and it is not recorded
+# when nothing matched.
+EXACT_MATCH_SCORE = 1.0
+
+# Bands apply only to a score the detector recorded. A missing score stays
+# blank. high: score >= high_min. check: score >= check_min. low: below check_min.
+CONFIDENCE_HIGH_MIN = 0.90
+CONFIDENCE_CHECK_MIN = 0.60
+
 # Match lines are long strokes, not device marks.
 MIN_MATCH_LINE_PT = 80.0
